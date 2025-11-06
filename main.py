@@ -84,30 +84,59 @@ class LifeTracker:
         fps_calc_time = time.time()
         fps = 0
 
+        # 性能分析
+        enable_profiling = self.config.get('debug', {}).get('show_state_info', False)
+        if enable_profiling:
+            print("🔍 性能分析模式已启用\n")
+
+        profiling_data = {
+            'read_frame': [],
+            'detection': [],
+            'pose': [],
+            'state_machine': [],
+            'visualization': [],
+            'waitkey': [],
+            'total_frame': []
+        }
+
         try:
             while self.running:
+                frame_start = time.time()
+
                 # 读取帧
+                t0 = time.time()
                 ret, frame = self.cap.read()
                 if not ret:
                     print("[错误] 无法读取摄像头画面")
                     break
+                t1 = time.time()
+                profiling_data['read_frame'].append((t1 - t0) * 1000)
 
                 frame_count += 1
                 current_time = time.time()
 
                 # 1. 人体检测
+                t0 = time.time()
                 bbox = self.person_detector.detect(frame)
+                t1 = time.time()
+                profiling_data['detection'].append((t1 - t0) * 1000)
 
                 # 2. 姿态估计
+                t0 = time.time()
                 keypoints = None
                 if bbox is not None:
                     keypoints = self.pose_estimator.estimate(frame, bbox)
+                t1 = time.time()
+                profiling_data['pose'].append((t1 - t0) * 1000)
 
                 # 保存关键点用于调试显示
                 self._last_keypoints = keypoints
 
                 # 3. 更新状态机
+                t0 = time.time()
                 events = self.state_machine.update(bbox, keypoints, current_time)
+                t1 = time.time()
+                profiling_data['state_machine'].append((t1 - t0) * 1000)
 
                 # 4. 记录事件
                 if events:
@@ -120,11 +149,16 @@ class LifeTracker:
                     self.event_logger.log_performance(detector_metrics, pose_metrics)
 
                 # 6. 可视化
+                t0 = time.time()
                 if self.show_visualization:
                     vis_frame = self._visualize(frame, bbox, keypoints, fps)
                     cv2.imshow('Life Tracker', vis_frame)
+                t1 = time.time()
+                profiling_data['visualization'].append((t1 - t0) * 1000)
 
-                    # 处理按键
+                # 7. 处理按键
+                t0 = time.time()
+                if self.show_visualization:
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('q'):
                         print("\n[退出] 用户按下'q'键")
@@ -132,12 +166,25 @@ class LifeTracker:
                     elif key == ord('r'):
                         # 切换ROI显示
                         self.show_roi = not getattr(self, 'show_roi', True)
+                t1 = time.time()
+                profiling_data['waitkey'].append((t1 - t0) * 1000)
 
-                # 7. 计算FPS
+                # 记录总帧时间
+                frame_end = time.time()
+                profiling_data['total_frame'].append((frame_end - frame_start) * 1000)
+
+                # 8. 计算FPS
                 if current_time - fps_calc_time >= 1.0:
                     fps = frame_count / (current_time - fps_calc_time)
                     frame_count = 0
                     fps_calc_time = current_time
+
+                # 9. 每30帧输出性能分析（约3秒一次）
+                if enable_profiling and len(profiling_data['total_frame']) >= 30:
+                    self._print_profiling(profiling_data)
+                    # 清空数据
+                    for key in profiling_data:
+                        profiling_data[key] = []
 
         except KeyboardInterrupt:
             print("\n[退出] 用户中断 (Ctrl+C)")
@@ -283,6 +330,41 @@ class LifeTracker:
             tips += " | Debug ON"
         cv2.putText(frame, tips, (20, h - 20),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+    def _print_profiling(self, profiling_data):
+        """打印性能分析报告"""
+        print("\n" + "="*70)
+        print("  性能分析报告 (30帧平均)")
+        print("="*70)
+
+        # 计算每个阶段的平均值
+        total_avg = np.mean(profiling_data['total_frame'])
+
+        stages = [
+            ('读取帧', 'read_frame'),
+            ('人体检测', 'detection'),
+            ('姿态估计', 'pose'),
+            ('状态机更新', 'state_machine'),
+            ('可视化绘制', 'visualization'),
+            ('waitKey', 'waitkey'),
+        ]
+
+        print(f"{'阶段':<12} {'平均耗时':>10} {'占比':>8} {'最小值':>10} {'最大值':>10}")
+        print("-"*70)
+
+        for name, key in stages:
+            if profiling_data[key]:
+                avg = np.mean(profiling_data[key])
+                min_val = np.min(profiling_data[key])
+                max_val = np.max(profiling_data[key])
+                percentage = (avg / total_avg * 100) if total_avg > 0 else 0
+                print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms")
+
+        print("-"*70)
+        print(f"{'总耗时':<12} {total_avg:>8.2f}ms {'100.0%':>7}")
+        print(f"{'理论FPS':<12} {1000/total_avg:>8.1f}")
+        print(f"{'实际FPS':<12} {1000/total_avg:>8.1f} (受camera fps配置限制)")
+        print("="*70 + "\n")
 
     def cleanup(self):
         """清理资源"""
