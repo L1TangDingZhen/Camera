@@ -189,37 +189,72 @@ class BehaviorStateMachine:
         """实时更新诊断信息（每帧都调用）"""
         from ..detectors.base import Keypoint, PoseUtils
 
-        # 检查是否有下半身
+        # 检查是否有下半身（更严格的判断）
         has_lower_body = (
-            keypoints[Keypoint.LEFT_KNEE, 2] > 0.3 and
-            keypoints[Keypoint.RIGHT_KNEE, 2] > 0.3 and
-            keypoints[Keypoint.LEFT_ANKLE, 2] > 0.3 and
-            keypoints[Keypoint.RIGHT_ANKLE, 2] > 0.3
+            keypoints[Keypoint.LEFT_KNEE, 2] > 0.5 and  # 提高置信度阈值
+            keypoints[Keypoint.RIGHT_KNEE, 2] > 0.5 and
+            keypoints[Keypoint.LEFT_ANKLE, 2] > 0.5 and
+            keypoints[Keypoint.RIGHT_ANKLE, 2] > 0.5 and
+            # 检查膝盖是否在臀部下方（排除推测的关键点）
+            keypoints[Keypoint.LEFT_KNEE, 1] > keypoints[Keypoint.LEFT_HIP, 1] and
+            keypoints[Keypoint.RIGHT_KNEE, 1] > keypoints[Keypoint.RIGHT_HIP, 1]
         )
 
         # 计算基础特征
         body_angle = PoseUtils.get_body_orientation(keypoints)
         body_height = PoseUtils.get_body_height(keypoints)
 
+        # 计算上半身特征（两种模式都需要）
+        left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
+        right_shoulder = keypoints[Keypoint.RIGHT_SHOULDER]
+        left_hip = keypoints[Keypoint.LEFT_HIP]
+        right_hip = keypoints[Keypoint.RIGHT_HIP]
+
+        shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
+        hip_y = (left_hip[1] + right_hip[1]) / 2
+        shoulder_hip_dist = abs(hip_y - shoulder_y)
+        ratio = shoulder_hip_dist / (body_height + 1e-6)
+
         if has_lower_body:
-            # 全身模式诊断
+            # 全身模式诊断 - 计算膝盖角度和臀部高度比
+            left_knee = keypoints[Keypoint.LEFT_KNEE]
+            right_knee = keypoints[Keypoint.RIGHT_KNEE]
+            left_ankle = keypoints[Keypoint.LEFT_ANKLE]
+            right_ankle = keypoints[Keypoint.RIGHT_ANKLE]
+
+            ankle_y = (left_ankle[1] + right_ankle[1]) / 2
+            hip_height_ratio = (ankle_y - hip_y) / (body_height + 1e-6)
+
+            left_knee_angle = PoseUtils.calculate_angle(
+                keypoints[Keypoint.LEFT_HIP][:2],
+                keypoints[Keypoint.LEFT_KNEE][:2],
+                keypoints[Keypoint.LEFT_ANKLE][:2]
+            )
+            right_knee_angle = PoseUtils.calculate_angle(
+                keypoints[Keypoint.RIGHT_HIP][:2],
+                keypoints[Keypoint.RIGHT_KNEE][:2],
+                keypoints[Keypoint.RIGHT_ANKLE][:2]
+            )
+            avg_knee_angle = (left_knee_angle + right_knee_angle) / 2
+
+            # 全身sitting条件
+            hip_ratio_ok = 0.3 < hip_height_ratio < 0.6
+            knee_angle_ok = avg_knee_angle < 120
+
             self.last_diagnosis = {
                 'mode': 'full_body',
                 'body_angle': body_angle,
                 'body_height_px': body_height,
+                'knee_angle': avg_knee_angle,
+                'knee_angle_threshold': 120,
+                'knee_angle_ok': knee_angle_ok,
+                'hip_height_ratio': hip_height_ratio,
+                'hip_ratio_range': (0.3, 0.6),
+                'hip_ratio_ok': hip_ratio_ok,
+                'shoulder_hip_ratio': ratio,
             }
         else:
             # 上半身模式诊断
-            left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
-            right_shoulder = keypoints[Keypoint.RIGHT_SHOULDER]
-            left_hip = keypoints[Keypoint.LEFT_HIP]
-            right_hip = keypoints[Keypoint.RIGHT_HIP]
-
-            shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
-            hip_y = (left_hip[1] + right_hip[1]) / 2
-            shoulder_hip_dist = abs(hip_y - shoulder_y)
-            ratio = shoulder_hip_dist / (body_height + 1e-6)
-
             self.last_diagnosis = {
                 'mode': 'upper_body',
                 'body_angle': body_angle,

@@ -353,27 +353,50 @@ class LifeTracker:
                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
                     y_offset += 18
 
-                    # Body angle检查
-                    if 'body_angle' in diagnosis:
-                        angle = diagnosis['body_angle']
-                        angle_range = diagnosis.get('body_angle_range', (0, 0))
-                        angle_ok = diagnosis.get('body_angle_ok', False)
-                        color = (0, 255, 0) if angle_ok else (0, 0, 255)
-                        status = "OK" if angle_ok else "FAIL"
-                        cv2.putText(frame, f"Angle: {angle:.1f} [{angle_range[0]}-{angle_range[1]}] {status}",
-                                   (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-                        y_offset += 18
+                    # 根据模式显示不同的诊断信息
+                    if mode == 'upper_body':
+                        # 上半身模式：显示 body_angle 和 shoulder_hip_ratio
+                        if 'body_angle' in diagnosis:
+                            angle = diagnosis['body_angle']
+                            angle_range = diagnosis.get('body_angle_range', (0, 0))
+                            angle_ok = diagnosis.get('body_angle_ok', False)
+                            color = (0, 255, 0) if angle_ok else (0, 0, 255)
+                            status = "OK" if angle_ok else "FAIL"
+                            cv2.putText(frame, f"Angle: {angle:.1f} [{angle_range[0]}-{angle_range[1]}] {status}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
 
-                    # Ratio检查
-                    if 'shoulder_hip_ratio' in diagnosis:
-                        ratio = diagnosis['shoulder_hip_ratio']
-                        ratio_range = diagnosis.get('ratio_range', (0, 0))
-                        ratio_ok = diagnosis.get('ratio_ok', False)
-                        color = (0, 255, 0) if ratio_ok else (0, 0, 255)
-                        status = "OK" if ratio_ok else "FAIL"
-                        cv2.putText(frame, f"Ratio: {ratio:.2f} [{ratio_range[0]}-{ratio_range[1]}] {status}",
-                                   (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-                        y_offset += 18
+                        if 'shoulder_hip_ratio' in diagnosis:
+                            ratio = diagnosis['shoulder_hip_ratio']
+                            ratio_range = diagnosis.get('ratio_range', (0, 0))
+                            ratio_ok = diagnosis.get('ratio_ok', False)
+                            color = (0, 255, 0) if ratio_ok else (0, 0, 255)
+                            status = "OK" if ratio_ok else "FAIL"
+                            cv2.putText(frame, f"Ratio: {ratio:.2f} [{ratio_range[0]}-{ratio_range[1]}] {status}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                    elif mode == 'full_body':
+                        # 全身模式：显示 knee_angle 和 hip_height_ratio
+                        if 'knee_angle' in diagnosis:
+                            knee_angle = diagnosis['knee_angle']
+                            knee_threshold = diagnosis.get('knee_angle_threshold', 120)
+                            knee_ok = diagnosis.get('knee_angle_ok', False)
+                            color = (0, 255, 0) if knee_ok else (0, 0, 255)
+                            status = "OK" if knee_ok else "FAIL"
+                            cv2.putText(frame, f"Knee: {knee_angle:.1f} [<{knee_threshold}] {status}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                        if 'hip_height_ratio' in diagnosis:
+                            hip_ratio = diagnosis['hip_height_ratio']
+                            hip_range = diagnosis.get('hip_ratio_range', (0, 0))
+                            hip_ok = diagnosis.get('hip_ratio_ok', False)
+                            color = (0, 255, 0) if hip_ok else (0, 0, 255)
+                            status = "OK" if hip_ok else "FAIL"
+                            cv2.putText(frame, f"HipRatio: {hip_ratio:.2f} [{hip_range[0]}-{hip_range[1]}] {status}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
 
             except:
                 pass
