@@ -89,6 +89,13 @@ class LifeTracker:
         if enable_profiling:
             print("🔍 性能分析模式已启用\n")
 
+        # 检测频率控制
+        detection_interval = self.config.get('inference', {}).get('detection_interval', 1)
+        detection_counter = 0  # 检测帧计数器
+        cached_bbox = None  # 缓存的bbox
+        if detection_interval > 1:
+            print(f"⚡ 检测优化: 每{detection_interval}帧检测一次，中间帧复用结果\n")
+
         profiling_data = {
             'read_frame': [],
             'detection': [],
@@ -115,11 +122,21 @@ class LifeTracker:
                 frame_count += 1
                 current_time = time.time()
 
-                # 1. 人体检测
+                # 1. 人体检测（每N帧检测一次，中间帧复用）
+                detection_counter += 1
                 t0 = time.time()
-                bbox = self.person_detector.detect(frame)
-                t1 = time.time()
-                profiling_data['detection'].append((t1 - t0) * 1000)
+
+                if detection_counter % detection_interval == 0:
+                    # 执行实际检测
+                    bbox = self.person_detector.detect(frame)
+                    cached_bbox = bbox  # 缓存结果
+                    t1 = time.time()
+                    profiling_data['detection'].append((t1 - t0) * 1000)
+                else:
+                    # 复用上一次的检测结果
+                    bbox = cached_bbox
+                    t1 = time.time()
+                    # 不记录时间，因为没有实际检测
 
                 # 2. 姿态估计
                 t0 = time.time()
@@ -352,18 +369,31 @@ class LifeTracker:
         print(f"{'阶段':<12} {'平均耗时':>10} {'占比':>8} {'最小值':>10} {'最大值':>10}")
         print("-"*70)
 
+        detection_count = len(profiling_data['detection'])
+        total_frames = len(profiling_data['total_frame'])
+
         for name, key in stages:
             if profiling_data[key]:
                 avg = np.mean(profiling_data[key])
                 min_val = np.min(profiling_data[key])
                 max_val = np.max(profiling_data[key])
                 percentage = (avg / total_avg * 100) if total_avg > 0 else 0
-                print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms")
+
+                # 对检测阶段显示实际检测次数
+                if key == 'detection' and detection_count < total_frames:
+                    print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms (仅{detection_count}次)")
+                else:
+                    print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms")
 
         print("-"*70)
         print(f"{'总耗时':<12} {total_avg:>8.2f}ms {'100.0%':>7}")
         print(f"{'理论FPS':<12} {1000/total_avg:>8.1f}")
-        print(f"{'实际FPS':<12} {1000/total_avg:>8.1f} (受camera fps配置限制)")
+
+        # 显示检测优化信息
+        detection_interval = self.config.get('inference', {}).get('detection_interval', 1)
+        if detection_interval > 1:
+            print(f"{'检测间隔':<12} 每{detection_interval}帧检测1次 (降低{(1-1/detection_interval)*100:.0f}%检测负载)")
+
         print("="*70 + "\n")
 
     def cleanup(self):

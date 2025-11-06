@@ -30,6 +30,7 @@ camera:
 
 inference:
   skip_frames: 0
+  detection_interval: 3  # 每N帧进行一次人体检测，中间帧复用bbox（1=每帧检测）
   max_buffer_size: 100
 
 roi:
