@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   life-tracker:
     build: .
@@ -9,9 +7,12 @@ services:
       - ./logs:/app/logs
       - ./models:/app/models
       - ./config:/app/config
-    devices:
-      - /dev/video0:/dev/video0  # 映射摄像头
+    # 摄像头映射（仅Linux）
+    # Windows/Mac用户请使用视频文件测试或修改config中的camera.source
+    # devices:
+    #   - /dev/video0:/dev/video0
     environment:
-      - DISPLAY=${DISPLAY}
-    network_mode: host
+      - DISPLAY=${DISPLAY:-}
+    ports:
+      - "5000:5000"
     restart: unless-stopped

@@ -1,0 +1,49 @@
+# Life Tracker Dockerfile (Headless版本 - 适合无GUI环境)
+FROM python:3.10-slim
+
+# 安装最小系统依赖
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libgomp1 \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制依赖文件
+COPY requirements.txt .
+
+# 安装Python依赖（使用headless版本的OpenCV）
+RUN pip install --no-cache-dir \
+    numpy \
+    opencv-python-headless \
+    pyyaml \
+    torch \
+    torchvision \
+    ultralytics \
+    mediapipe \
+    pandas \
+    scipy \
+    matplotlib \
+    psutil \
+    tqdm \
+    loguru \
+    flask \
+    flask-cors
+
+# 复制项目文件
+COPY . .
+
+# 创建数据目录
+RUN mkdir -p data logs models
+
+# 暴露Web端口
+EXPOSE 5000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s \
+  CMD python -c "import sys; sys.exit(0)"
+
+# 默认命令（无可视化）
+CMD ["python", "main.py", "--device", "pc", "--no-vis"]
