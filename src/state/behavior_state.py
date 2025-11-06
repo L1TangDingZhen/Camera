@@ -84,6 +84,9 @@ class BehaviorStateMachine:
         # 事件缓冲（防止抖动）
         self.event_timers: Dict[str, float] = {}
 
+        # 诊断信息（用于调试）
+        self.last_diagnosis: Dict = {}
+
         print(f"[BehaviorStateMachine] 初始化完成")
 
     def update(self, bbox: Optional[np.ndarray], keypoints: Optional[np.ndarray],
@@ -281,8 +284,6 @@ class BehaviorStateMachine:
         """上半身的sitting判断（桌面摄像头，看不到腿）"""
         # 1. 身体角度接近垂直（60-110度），排除躺着
         body_angle = PoseUtils.get_body_orientation(keypoints)
-        if not (60 < body_angle < 110):
-            return False
 
         # 2. 肩膀-臀部距离适中（排除站立）
         left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
@@ -300,17 +301,25 @@ class BehaviorStateMachine:
         body_height = PoseUtils.get_body_height(keypoints)
 
         # 肩-臀距离占总体高度的比例
-        # 坐着时这个比例应该适中（不会太小也不会太大）
-        # 站立时肩-臀距离会占较大比例（因为身体伸展）
-        # 躺着时身体角度已经排除了
         ratio = shoulder_hip_dist / (body_height + 1e-6)
 
-        # 坐着时肩-臀距离大约占body_height的30-70%
-        # 这是一个经验阈值，可以根据实际情况调整
-        if 0.3 < ratio < 0.8:
-            return True
+        # 记录诊断信息
+        self.last_diagnosis = {
+            'mode': 'upper_body',
+            'body_angle': body_angle,
+            'body_angle_range': (60, 110),
+            'body_angle_ok': 60 < body_angle < 110,
+            'shoulder_hip_ratio': ratio,
+            'ratio_range': (0.3, 0.8),
+            'ratio_ok': 0.3 < ratio < 0.8,
+            'body_height_px': body_height,
+        }
 
-        return False
+        # 判断逻辑
+        angle_ok = 60 < body_angle < 110
+        ratio_ok = 0.3 < ratio < 0.8
+
+        return angle_ok and ratio_ok
 
     def _calculate_motion(self, keypoints: np.ndarray) -> float:
         """计算运动量（用于判断睡眠）"""
@@ -468,3 +477,7 @@ class BehaviorStateMachine:
     def get_state_duration(self, timestamp: float) -> float:
         """获取当前状态持续时间（秒）"""
         return timestamp - self.state_start_time
+
+    def get_diagnosis(self) -> Dict:
+        """获取最近的诊断信息（用于调试）"""
+        return self.last_diagnosis

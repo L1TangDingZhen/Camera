@@ -338,6 +338,43 @@ class LifeTracker:
                 body_height = PoseUtils.get_body_height(kp)
                 cv2.putText(frame, f"Height: {body_height:.0f}px", (20, y_offset),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                y_offset += 20
+
+                # 诊断信息（显示判断依据）
+                diagnosis = self.state_machine.get_diagnosis()
+                if diagnosis:
+                    y_offset += 10  # 空一行
+                    cv2.putText(frame, "=== Diagnosis ===", (20, y_offset),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
+                    y_offset += 20
+
+                    mode = diagnosis.get('mode', 'N/A')
+                    cv2.putText(frame, f"Mode: {mode}", (20, y_offset),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                    y_offset += 18
+
+                    # Body angle检查
+                    if 'body_angle' in diagnosis:
+                        angle = diagnosis['body_angle']
+                        angle_range = diagnosis.get('body_angle_range', (0, 0))
+                        angle_ok = diagnosis.get('body_angle_ok', False)
+                        color = (0, 255, 0) if angle_ok else (0, 0, 255)
+                        status = "OK" if angle_ok else "FAIL"
+                        cv2.putText(frame, f"Angle: {angle:.1f} [{angle_range[0]}-{angle_range[1]}] {status}",
+                                   (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                        y_offset += 18
+
+                    # Ratio检查
+                    if 'shoulder_hip_ratio' in diagnosis:
+                        ratio = diagnosis['shoulder_hip_ratio']
+                        ratio_range = diagnosis.get('ratio_range', (0, 0))
+                        ratio_ok = diagnosis.get('ratio_ok', False)
+                        color = (0, 255, 0) if ratio_ok else (0, 0, 255)
+                        status = "OK" if ratio_ok else "FAIL"
+                        cv2.putText(frame, f"Ratio: {ratio:.2f} [{ratio_range[0]}-{ratio_range[1]}] {status}",
+                                   (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                        y_offset += 18
+
             except:
                 pass
 
