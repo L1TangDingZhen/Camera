@@ -1,5 +1,4 @@
-# 核心依赖（PC和X390）
-# Python 3.8+
+# 核心依赖 - Python 3.8+
 
 # 深度学习框架
 torch>=2.0.0
@@ -8,6 +7,8 @@ ultralytics>=8.0.0  # YOLOv8
 
 # 姿态估计
 mediapipe>=0.10.0
+# 注意: Windows下 mmcv-full/mmpose 可能安装失败，不影响CPU运行
+# GPU支持需要这些包（后续开发时安装）
 mmcv-full>=1.7.0
 mmpose>=1.0.0
 openmim>=0.3.0
@@ -21,9 +22,6 @@ pillow>=10.0.0
 # 数据处理
 pandas>=2.0.0
 scipy>=1.10.0
-
-# 数据库
-sqlite3  # Python标准库
 
 # Web框架
 flask>=2.3.0
@@ -47,3 +45,5 @@ plotly>=5.14.0
 
 # 工具
 python-dotenv>=1.0.0
+
+# 注意: sqlite3 是Python标准库，无需安装
