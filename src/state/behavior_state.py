@@ -163,11 +163,16 @@ class BehaviorStateMachine:
         """
         # 1. 没有检测到人
         if bbox is None or keypoints is None:
+            self.last_diagnosis = {'mode': 'absent'}
             return BehaviorState.ABSENT
 
         # 2. 检查关键点质量
         if not self._check_keypoints_quality(keypoints):
+            self.last_diagnosis = {'mode': 'unknown', 'reason': 'low_keypoint_quality'}
             return BehaviorState.UNKNOWN
+
+        # 先计算所有诊断特征（无论最终判断结果如何）
+        self._update_diagnosis(keypoints)
 
         # 3. 判断躺姿
         if self._is_lying(keypoints):
@@ -179,6 +184,52 @@ class BehaviorStateMachine:
 
         # 5. 默认为站立
         return BehaviorState.STANDING
+
+    def _update_diagnosis(self, keypoints: np.ndarray):
+        """实时更新诊断信息（每帧都调用）"""
+        from ..detectors.base import Keypoint, PoseUtils
+
+        # 检查是否有下半身
+        has_lower_body = (
+            keypoints[Keypoint.LEFT_KNEE, 2] > 0.3 and
+            keypoints[Keypoint.RIGHT_KNEE, 2] > 0.3 and
+            keypoints[Keypoint.LEFT_ANKLE, 2] > 0.3 and
+            keypoints[Keypoint.RIGHT_ANKLE, 2] > 0.3
+        )
+
+        # 计算基础特征
+        body_angle = PoseUtils.get_body_orientation(keypoints)
+        body_height = PoseUtils.get_body_height(keypoints)
+
+        if has_lower_body:
+            # 全身模式诊断
+            self.last_diagnosis = {
+                'mode': 'full_body',
+                'body_angle': body_angle,
+                'body_height_px': body_height,
+            }
+        else:
+            # 上半身模式诊断
+            left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
+            right_shoulder = keypoints[Keypoint.RIGHT_SHOULDER]
+            left_hip = keypoints[Keypoint.LEFT_HIP]
+            right_hip = keypoints[Keypoint.RIGHT_HIP]
+
+            shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
+            hip_y = (left_hip[1] + right_hip[1]) / 2
+            shoulder_hip_dist = abs(hip_y - shoulder_y)
+            ratio = shoulder_hip_dist / (body_height + 1e-6)
+
+            self.last_diagnosis = {
+                'mode': 'upper_body',
+                'body_angle': body_angle,
+                'body_angle_range': (60, 110),
+                'body_angle_ok': 60 < body_angle < 110,
+                'shoulder_hip_ratio': ratio,
+                'ratio_range': (0.3, 0.8),
+                'ratio_ok': 0.3 < ratio < 0.8,
+                'body_height_px': body_height,
+            }
 
     def _check_keypoints_quality(self, keypoints: np.ndarray) -> bool:
         """检查关键点质量"""
@@ -282,42 +333,12 @@ class BehaviorStateMachine:
 
     def _is_sitting_upper_body(self, keypoints: np.ndarray) -> bool:
         """上半身的sitting判断（桌面摄像头，看不到腿）"""
-        # 1. 身体角度接近垂直（60-110度），排除躺着
-        body_angle = PoseUtils.get_body_orientation(keypoints)
+        # 使用已经计算好的诊断信息
+        if not self.last_diagnosis or self.last_diagnosis.get('mode') != 'upper_body':
+            return False
 
-        # 2. 肩膀-臀部距离适中（排除站立）
-        left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
-        right_shoulder = keypoints[Keypoint.RIGHT_SHOULDER]
-        left_hip = keypoints[Keypoint.LEFT_HIP]
-        right_hip = keypoints[Keypoint.RIGHT_HIP]
-
-        shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
-        hip_y = (left_hip[1] + right_hip[1]) / 2
-
-        # 肩-臀距离（像素）
-        shoulder_hip_dist = abs(hip_y - shoulder_y)
-
-        # 获取身体高度（肩膀到臀部的距离）
-        body_height = PoseUtils.get_body_height(keypoints)
-
-        # 肩-臀距离占总体高度的比例
-        ratio = shoulder_hip_dist / (body_height + 1e-6)
-
-        # 记录诊断信息
-        self.last_diagnosis = {
-            'mode': 'upper_body',
-            'body_angle': body_angle,
-            'body_angle_range': (60, 110),
-            'body_angle_ok': 60 < body_angle < 110,
-            'shoulder_hip_ratio': ratio,
-            'ratio_range': (0.3, 0.8),
-            'ratio_ok': 0.3 < ratio < 0.8,
-            'body_height_px': body_height,
-        }
-
-        # 判断逻辑
-        angle_ok = 60 < body_angle < 110
-        ratio_ok = 0.3 < ratio < 0.8
+        angle_ok = self.last_diagnosis.get('body_angle_ok', False)
+        ratio_ok = self.last_diagnosis.get('ratio_ok', False)
 
         return angle_ok and ratio_ok
 
