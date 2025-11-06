@@ -1,0 +1,89 @@
+# PC开发配置 - 阶段1
+name: "PC Development"
+device: cuda:0
+
+hardware:
+  name: "PC i5-12 + RTX 4070"
+  cpu_cores: 12
+  gpu_memory: 12288  # MB
+
+models:
+  person:
+    model: yolov8s.pt
+    device: cuda:0
+    batch_size: 1
+    confidence: 0.5
+    iou: 0.45
+
+  pose:
+    backend: rtmpose  # 选项: rtmpose, vitpose, mediapipe
+    model: rtmpose_s.pth
+    device: cuda:0
+    confidence: 0.3
+
+camera:
+  source: 0  # 0=默认摄像头, 或者rtsp://...
+  fps: 30
+  resolution: [640, 480]
+  flip: false
+  rotation: 0
+
+inference:
+  skip_frames: 0
+  max_buffer_size: 150  # 帧数缓冲
+
+roi:
+  zones:
+    bed:
+      enabled: true
+      points: []  # 使用calibrate_roi.py标定
+    door:
+      enabled: true
+      points: []
+    chair:
+      enabled: true
+      points: []
+    bathroom:
+      enabled: false
+      points: []
+
+behavior:
+  # 坐姿判断阈值
+  sitting:
+    hip_height_min: 0.3  # 相对身高
+    hip_height_max: 0.6
+    knee_angle_max: 120  # 度
+
+  # 躺姿判断阈值
+  lying:
+    body_angle_max: 30  # 身体与水平面角度
+    shoulder_hip_ratio: 0.15  # 肩膀-臀部高度差
+
+  # 睡眠判断
+  sleeping:
+    still_duration: 300  # 秒，持续不动视为睡眠
+    motion_threshold: 0.02  # 运动阈值
+
+  # 事件判断
+  events:
+    enter_duration: 2  # 进入区域持续时间
+    leave_duration: 2  # 离开区域持续时间
+    night_start: "22:00"
+    night_end: "06:00"
+
+storage:
+  database: "data/database.db"
+  backup_interval: 86400  # 秒，每天备份
+  retention_days: 90  # 数据保留天数
+
+logging:
+  level: DEBUG  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/app.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  performance_metrics: true
+
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true

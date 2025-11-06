@@ -1,0 +1,90 @@
+# X390验证配置 - 阶段2
+name: "X390 Validation"
+device: cpu
+
+hardware:
+  name: "ThinkPad X390 i5-8"
+  cpu_cores: 4
+  memory: 8192  # MB
+
+models:
+  person:
+    model: yolov8s.pt
+    device: cpu
+    batch_size: 1
+    confidence: 0.5
+    iou: 0.45
+    threads: 4
+
+  pose:
+    backend: mediapipe  # CPU上最优选择
+    complexity: 1  # 0=Lite, 1=Full, 2=Heavy
+    device: cpu
+    confidence: 0.3
+
+camera:
+  source: 0
+  fps: 10  # 降低采样率以减少CPU负担
+  resolution: [640, 480]
+  flip: false
+  rotation: 0
+
+inference:
+  skip_frames: 0
+  max_buffer_size: 100  # 降低缓冲（因为fps降低）
+
+roi:
+  zones:
+    bed:
+      enabled: true
+      points: []
+    door:
+      enabled: true
+      points: []
+    chair:
+      enabled: true
+      points: []
+    bathroom:
+      enabled: false
+      points: []
+
+behavior:
+  sitting:
+    hip_height_min: 0.3
+    hip_height_max: 0.6
+    knee_angle_max: 120
+
+  lying:
+    body_angle_max: 30
+    shoulder_hip_ratio: 0.15
+
+  sleeping:
+    still_duration: 300
+    motion_threshold: 0.02
+
+  events:
+    enter_duration: 2
+    leave_duration: 2
+    night_start: "22:00"
+    night_end: "06:00"
+
+optimization:
+  num_threads: 4
+  enable_mkl: true  # Intel CPU优化
+
+storage:
+  database: "data/database.db"
+  backup_interval: 86400
+  retention_days: 90
+
+logging:
+  level: INFO  # 生产环境降低日志级别
+  file: "logs/app.log"
+  max_size: 10485760
+  backup_count: 5
+  performance_metrics: true
+
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false

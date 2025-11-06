@@ -1,0 +1,97 @@
+# Jetson生产配置 - 阶段3
+name: "Jetson Production"
+device: cuda:0
+
+hardware:
+  name: "Jetson Orin Nano"
+  cpu_cores: 6
+  gpu_memory: 8192  # MB shared
+
+models:
+  person:
+    model: yolov8s.engine  # TensorRT引擎
+    device: cuda:0
+    batch_size: 1
+    confidence: 0.5
+    iou: 0.45
+    precision: fp16
+
+  pose:
+    backend: rtmpose  # Jetson上推荐
+    model: rtmpose_s.engine  # TensorRT引擎
+    device: cuda:0
+    confidence: 0.3
+    precision: fp16
+
+camera:
+  source: 0
+  fps: 30  # 恢复30 FPS
+  resolution: [640, 480]
+  flip: false
+  rotation: 0
+
+inference:
+  skip_frames: 0
+  max_buffer_size: 150
+
+roi:
+  zones:
+    bed:
+      enabled: true
+      points: []
+    door:
+      enabled: true
+      points: []
+    chair:
+      enabled: true
+      points: []
+    bathroom:
+      enabled: false
+      points: []
+
+behavior:
+  sitting:
+    hip_height_min: 0.3
+    hip_height_max: 0.6
+    knee_angle_max: 120
+
+  lying:
+    body_angle_max: 30
+    shoulder_hip_ratio: 0.15
+
+  sleeping:
+    still_duration: 300
+    motion_threshold: 0.02
+
+  events:
+    enter_duration: 2
+    leave_duration: 2
+    night_start: "22:00"
+    night_end: "06:00"
+
+tensorrt:
+  fp16_mode: true
+  workspace_size: 4096  # MB
+  enable_dla: false
+  max_batch_size: 1
+
+optimization:
+  zero_copy: false
+  cuda_streams: 1
+
+storage:
+  database: "data/database.db"
+  backup_interval: 86400
+  retention_days: 90
+
+logging:
+  level: INFO
+  file: "logs/app.log"
+  max_size: 10485760
+  backup_count: 5
+  performance_metrics: true
+
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false

@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""
+Life Tracker - 行为监测系统主程序
+支持三阶段部署: PC -> X390 -> Jetson
+"""
+
+import argparse
+import time
+import yaml
+import cv2
+import numpy as np
+from pathlib import Path
+
+from src.detectors import PersonDetector, PoseEstimatorFactory
+from src.state import BehaviorStateMachine, ROIManager
+from src.storage import EventLogger
+
+
+class LifeTracker:
+    """Life Tracker主类"""
+
+    def __init__(self, config_path: str):
+        """
+        Args:
+            config_path: 配置文件路径
+        """
+        # 加载配置
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+
+        print(f"\n{'='*60}")
+        print(f"  Life Tracker - {self.config['name']}")
+        print(f"  设备: {self.config['device']}")
+        print(f"{'='*60}\n")
+
+        # 初始化组件
+        self._init_components()
+
+    def _init_components(self):
+        """初始化所有组件"""
+        # 1. 创建检测器
+        print("[初始化] 加载人体检测器...")
+        self.person_detector = PersonDetector(self.config['models']['person'])
+
+        print("[初始化] 加载姿态估计器...")
+        self.pose_estimator = PoseEstimatorFactory.create(self.config['models']['pose'])
+
+        # 2. 创建ROI管理器
+        print("[初始化] 加载ROI管理器...")
+        self.roi_manager = ROIManager(self.config.get('roi', {}))
+
+        # 3. 创建状态机
+        print("[初始化] 创建状态机...")
+        self.state_machine = BehaviorStateMachine(self.config, self.roi_manager)
+
+        # 4. 创建事件记录器
+        print("[初始化] 创建事件记录器...")
+        self.event_logger = EventLogger(self.config)
+
+        # 5. 初始化摄像头
+        print("[初始化] 打开摄像头...")
+        camera_config = self.config['camera']
+        self.cap = cv2.VideoCapture(camera_config['source'])
+
+        if not self.cap.isOpened():
+            raise RuntimeError(f"无法打开摄像头: {camera_config['source']}")
+
+        # 设置摄像头参数
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
+        self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])
+
+        # 运行参数
+        self.show_visualization = True
+        self.running = True
+
+        print("\n[初始化] 所有组件加载完成!\n")
+
+    def run(self):
+        """主循环"""
+        print("[运行] 开始监测...\n")
+
+        frame_count = 0
+        fps_calc_time = time.time()
+        fps = 0
+
+        try:
+            while self.running:
+                # 读取帧
+                ret, frame = self.cap.read()
+                if not ret:
+                    print("[错误] 无法读取摄像头画面")
+                    break
+
+                frame_count += 1
+                current_time = time.time()
+
+                # 1. 人体检测
+                bbox = self.person_detector.detect(frame)
+
+                # 2. 姿态估计
+                keypoints = None
+                if bbox is not None:
+                    keypoints = self.pose_estimator.estimate(frame, bbox)
+
+                # 3. 更新状态机
+                events = self.state_machine.update(bbox, keypoints, current_time)
+
+                # 4. 记录事件
+                if events:
+                    self.event_logger.log_events(events)
+
+                # 5. 记录性能指标（每60秒）
+                if frame_count % (self.config['camera']['fps'] * 60) == 0:
+                    detector_metrics = self.person_detector.get_performance_metrics()
+                    pose_metrics = self.pose_estimator.get_performance_metrics()
+                    self.event_logger.log_performance(detector_metrics, pose_metrics)
+
+                # 6. 可视化
+                if self.show_visualization:
+                    vis_frame = self._visualize(frame, bbox, keypoints, fps)
+                    cv2.imshow('Life Tracker', vis_frame)
+
+                    # 处理按键
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        print("\n[退出] 用户按下'q'键")
+                        break
+                    elif key == ord('r'):
+                        # 切换ROI显示
+                        self.show_roi = not getattr(self, 'show_roi', True)
+
+                # 7. 计算FPS
+                if current_time - fps_calc_time >= 1.0:
+                    fps = frame_count / (current_time - fps_calc_time)
+                    frame_count = 0
+                    fps_calc_time = current_time
+
+        except KeyboardInterrupt:
+            print("\n[退出] 用户中断 (Ctrl+C)")
+
+        finally:
+            self.cleanup()
+
+    def _visualize(self, frame: np.ndarray, bbox: np.ndarray,
+                   keypoints: np.ndarray, fps: float) -> np.ndarray:
+        """
+        可视化
+
+        Args:
+            frame: 原始帧
+            bbox: 边界框
+            keypoints: 关键点
+            fps: 帧率
+
+        Returns:
+            可视化后的帧
+        """
+        vis_frame = frame.copy()
+
+        # 绘制ROI区域
+        if getattr(self, 'show_roi', True):
+            vis_frame = self.roi_manager.draw_zones(vis_frame)
+
+        # 绘制bbox
+        if bbox is not None:
+            x1, y1, x2, y2, conf = bbox.astype(int)
+            cv2.rectangle(vis_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(vis_frame, f"Person: {conf:.2f}", (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        # 绘制关键点
+        if keypoints is not None:
+            self._draw_keypoints(vis_frame, keypoints)
+
+        # 绘制状态信息
+        self._draw_status(vis_frame, fps)
+
+        return vis_frame
+
+    def _draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray):
+        """绘制关键点和骨架"""
+        from src.detectors.base import Keypoint
+
+        # 绘制关键点
+        for i, (x, y, conf) in enumerate(keypoints):
+            if conf > 0.3:
+                cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
+
+        # 绘制骨架
+        connections = Keypoint.get_connections()
+        for idx1, idx2 in connections:
+            if keypoints[idx1, 2] > 0.3 and keypoints[idx2, 2] > 0.3:
+                x1, y1 = keypoints[idx1, :2].astype(int)
+                x2, y2 = keypoints[idx2, :2].astype(int)
+                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+    def _draw_status(self, frame: np.ndarray, fps: float):
+        """绘制状态信息"""
+        h, w = frame.shape[:2]
+
+        # 背景
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (10, 10), (300, 150), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
+        # 文本信息
+        y_offset = 30
+        line_height = 25
+
+        # FPS
+        cv2.putText(frame, f"FPS: {fps:.1f}", (20, y_offset),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        y_offset += line_height
+
+        # 当前状态
+        state = self.state_machine.get_current_state()
+        cv2.putText(frame, f"State: {state.value}", (20, y_offset),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        y_offset += line_height
+
+        # 当前区域
+        zone = self.state_machine.current_zone or "None"
+        cv2.putText(frame, f"Zone: {zone}", (20, y_offset),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        y_offset += line_height
+
+        # 状态持续时间
+        duration = self.state_machine.get_state_duration(time.time())
+        cv2.putText(frame, f"Duration: {duration:.1f}s", (20, y_offset),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+        # 提示信息
+        cv2.putText(frame, "Press 'q' to quit, 'r' to toggle ROI", (20, h - 20),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+    def cleanup(self):
+        """清理资源"""
+        print("\n[清理] 释放资源...")
+
+        if hasattr(self, 'cap'):
+            self.cap.release()
+
+        cv2.destroyAllWindows()
+
+        if hasattr(self, 'event_logger'):
+            self.event_logger.close()
+
+        print("[清理] 完成!")
+
+
+def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(description='Life Tracker - 行为监测系统')
+
+    parser.add_argument('--config', type=str, default='config/config_pc.yaml',
+                       help='配置文件路径')
+    parser.add_argument('--device', type=str, choices=['pc', 'x390', 'jetson'],
+                       help='设备类型（自动选择配置文件）')
+    parser.add_argument('--no-vis', action='store_true',
+                       help='不显示可视化窗口')
+
+    args = parser.parse_args()
+
+    # 根据设备选择配置文件
+    if args.device:
+        config_path = f'config/config_{args.device}.yaml'
+    else:
+        config_path = args.config
+
+    # 检查配置文件
+    if not Path(config_path).exists():
+        print(f"错误: 配置文件不存在: {config_path}")
+        return
+
+    # 创建tracker
+    tracker = LifeTracker(config_path)
+
+    if args.no_vis:
+        tracker.show_visualization = False
+
+    # 运行
+    tracker.run()
+
+
+if __name__ == '__main__':
+    main()
