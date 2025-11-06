@@ -25,7 +25,7 @@ class LifeTracker:
             config_path: 配置文件路径
         """
         # 加载配置
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
         print(f"\n{'='*60}")

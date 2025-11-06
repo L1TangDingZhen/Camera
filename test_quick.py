@@ -11,7 +11,8 @@ import numpy as np
 import cv2
 
 # 添加src到路径
-sys.path.insert(0, '/home/user/Camera')
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.detectors import PersonDetector, PoseEstimatorFactory
 from src.state import BehaviorStateMachine, ROIManager
@@ -48,7 +49,7 @@ def test_components():
     # 1. 测试配置加载
     print("[1/5] 测试配置加载...")
     try:
-        with open('config/config_pc.yaml', 'r') as f:
+        with open('config/config_pc.yaml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         print("  ✓ 配置文件加载成功")
     except Exception as e:
