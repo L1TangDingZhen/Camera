@@ -103,6 +103,9 @@ class LifeTracker:
                 if bbox is not None:
                     keypoints = self.pose_estimator.estimate(frame, bbox)
 
+                # 保存关键点用于调试显示
+                self._last_keypoints = keypoints
+
                 # 3. 更新状态机
                 events = self.state_machine.update(bbox, keypoints, current_time)
 
@@ -199,9 +202,13 @@ class LifeTracker:
         """绘制状态信息"""
         h, w = frame.shape[:2]
 
+        # 调试模式：显示更详细的信息
+        debug_mode = self.config.get('debug', {}).get('show_state_info', False)
+        info_height = 150 if not debug_mode else 250
+
         # 背景
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (300, 150), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (10, 10), (350, info_height), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
         # 文本信息
@@ -215,8 +222,16 @@ class LifeTracker:
 
         # 当前状态
         state = self.state_machine.get_current_state()
+        state_color = {
+            'sitting': (0, 255, 255),  # 黄色
+            'lying': (255, 0, 255),    # 紫色
+            'standing': (0, 255, 0),   # 绿色
+            'sleeping': (255, 0, 0),   # 蓝色
+            'absent': (128, 128, 128), # 灰色
+        }.get(state.value, (255, 255, 255))
+
         cv2.putText(frame, f"State: {state.value}", (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, state_color, 2)
         y_offset += line_height
 
         # 当前区域
@@ -229,9 +244,44 @@ class LifeTracker:
         duration = self.state_machine.get_state_duration(time.time())
         cv2.putText(frame, f"Duration: {duration:.1f}s", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        y_offset += line_height
+
+        # 调试信息
+        if debug_mode and hasattr(self, '_last_keypoints') and self._last_keypoints is not None:
+            from src.detectors.base import Keypoint, PoseUtils
+            kp = self._last_keypoints
+
+            # 计算关键指标
+            try:
+                # 身体角度
+                body_angle = PoseUtils.get_body_orientation(kp)
+                cv2.putText(frame, f"Body Angle: {body_angle:.1f}deg", (20, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                y_offset += 20
+
+                # 膝盖角度
+                if kp[Keypoint.LEFT_HIP, 2] > 0.3 and kp[Keypoint.LEFT_KNEE, 2] > 0.3 and kp[Keypoint.LEFT_ANKLE, 2] > 0.3:
+                    knee_angle = PoseUtils.calculate_angle(
+                        kp[Keypoint.LEFT_HIP, :2],
+                        kp[Keypoint.LEFT_KNEE, :2],
+                        kp[Keypoint.LEFT_ANKLE, :2]
+                    )
+                    cv2.putText(frame, f"Knee Angle: {knee_angle:.1f}deg", (20, y_offset),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                    y_offset += 20
+
+                # 身体高度
+                body_height = PoseUtils.get_body_height(kp)
+                cv2.putText(frame, f"Height: {body_height:.0f}px", (20, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            except:
+                pass
 
         # 提示信息
-        cv2.putText(frame, "Press 'q' to quit, 'r' to toggle ROI", (20, h - 20),
+        tips = "Press: 'q'=quit"
+        if debug_mode:
+            tips += " | Debug ON"
+        cv2.putText(frame, tips, (20, h - 20),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     def cleanup(self):
@@ -253,28 +303,53 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='Life Tracker - 行为监测系统')
 
-    parser.add_argument('--config', type=str, default='config/config_pc.yaml',
-                       help='配置文件路径')
+    parser.add_argument('--config', type=str,
+                       help='配置文件路径（直接指定）')
+    parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'],
+                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson）')
     parser.add_argument('--device', type=str, choices=['pc', 'x390', 'jetson'],
-                       help='设备类型（自动选择配置文件）')
+                       help='[已弃用] 设备类型，请使用 --mode')
     parser.add_argument('--no-vis', action='store_true',
                        help='不显示可视化窗口')
+    parser.add_argument('--debug', action='store_true',
+                       help='调试模式：显示关键点、骨架和判断信息')
 
     args = parser.parse_args()
 
-    # 根据设备选择配置文件
-    if args.device:
-        config_path = f'config/config_{args.device}.yaml'
-    else:
+    # 选择配置文件
+    if args.config:
+        # 直接指定配置文件
         config_path = args.config
+    elif args.mode:
+        # 新方式：使用 --mode
+        config_path = f'config/config_{args.mode}.yaml'
+    elif args.device:
+        # 旧方式：向后兼容
+        print("⚠ 警告: --device 参数已弃用，请使用 --mode cpu 或 --mode gpu")
+        device_to_mode = {'pc': 'gpu', 'x390': 'cpu', 'jetson': 'gpu'}
+        mode = device_to_mode.get(args.device, 'cpu')
+        config_path = f'config/config_{mode}.yaml'
+    else:
+        # 默认使用CPU模式
+        config_path = 'config/config_cpu.yaml'
 
     # 检查配置文件
     if not Path(config_path).exists():
         print(f"错误: 配置文件不存在: {config_path}")
+        print(f"\n可用的配置文件：")
+        print(f"  config/config_cpu.yaml  - CPU模式（笔记本/X390）")
+        print(f"  config/config_gpu.yaml  - GPU模式（PC/Jetson）")
         return
 
     # 创建tracker
     tracker = LifeTracker(config_path)
+
+    # 启用调试模式
+    if args.debug:
+        tracker.config['debug']['show_keypoints'] = True
+        tracker.config['debug']['show_skeleton'] = True
+        tracker.config['debug']['show_angles'] = True
+        print("\n🔍 调试模式已启用")
 
     if args.no_vis:
         tracker.show_visualization = False

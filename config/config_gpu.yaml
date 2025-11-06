@@ -1,0 +1,106 @@
+# Life Tracker - GPU模式配置
+# 适用于：PC开发、Jetson生产、高性能需求
+
+name: "GPU Mode"
+device: cuda:0
+
+hardware:
+  name: "NVIDIA GPU (RTX/Jetson)"
+  note: "需要CUDA支持"
+
+models:
+  person:
+    model: yolov8s.pt  # 标准模型，GPU上性能好
+    device: cuda:0
+    confidence: 0.5
+    iou: 0.45
+
+  pose:
+    backend: mediapipe  # 暂时用MediaPipe，后续可改成rtmpose
+    complexity: 1  # 1=Full（平衡）
+    device: cpu  # MediaPipe不支持GPU，用CPU
+    confidence: 0.3
+    # 注意：如果安装了mmpose，可以改成：
+    # backend: rtmpose
+    # model: rtmpose_s.pth
+    # device: cuda:0
+
+camera:
+  source: 0  # 0=默认摄像头, 或视频文件路径
+  fps: 30  # GPU模式支持高帧率
+  resolution: [640, 480]  # 标准分辨率
+  flip: false
+  rotation: 0
+
+inference:
+  skip_frames: 0
+  max_buffer_size: 150
+
+roi:
+  zones:
+    bed:
+      enabled: true
+      points: []  # 使用calibrate_roi.py标定
+    door:
+      enabled: true
+      points: []
+    chair:
+      enabled: true
+      points: []
+    bathroom:
+      enabled: false
+      points: []
+
+behavior:
+  # 坐姿判断阈值
+  sitting:
+    hip_height_min: 0.3  # 相对身高
+    hip_height_max: 0.6
+    knee_angle_max: 120  # 度
+
+  # 躺姿判断阈值
+  lying:
+    body_angle_max: 30  # 身体与水平面角度
+    shoulder_hip_ratio: 0.15  # 肩膀-臀部高度差
+
+  # 睡眠判断
+  sleeping:
+    still_duration: 300  # 秒，持续不动视为睡眠
+    motion_threshold: 0.02  # 运动阈值
+
+  # 事件判断（增加防抖）
+  events:
+    enter_duration: 5  # 进入区域持续时间（增加到5秒减少误判）
+    leave_duration: 5  # 离开区域持续时间
+    night_start: "22:00"
+    night_end: "06:00"
+
+storage:
+  database: "data/database.db"
+  backup_interval: 86400  # 秒，每天备份
+  retention_days: 90  # 数据保留天数
+
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/app.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  performance_metrics: true
+
+debug:
+  # 调试模式配置
+  show_keypoints: false  # 显示关键点
+  show_skeleton: false   # 显示骨架
+  show_angles: false     # 显示角度计算
+  show_state_info: true  # 显示状态判断信息
+
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+
+# TensorRT优化（Jetson）
+tensorrt:
+  enabled: false  # PC开发时为false，Jetson上改为true
+  fp16_mode: true
+  workspace_size: 4096  # MB
