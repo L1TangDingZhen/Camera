@@ -306,9 +306,7 @@ def main():
     parser.add_argument('--config', type=str,
                        help='配置文件路径（直接指定）')
     parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'],
-                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson）')
-    parser.add_argument('--device', type=str, choices=['pc', 'x390', 'jetson'],
-                       help='[已弃用] 设备类型，请使用 --mode')
+                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson），默认cpu')
     parser.add_argument('--no-vis', action='store_true',
                        help='不显示可视化窗口')
     parser.add_argument('--debug', action='store_true',
@@ -321,14 +319,8 @@ def main():
         # 直接指定配置文件
         config_path = args.config
     elif args.mode:
-        # 新方式：使用 --mode
+        # 使用 --mode 参数
         config_path = f'config/config_{args.mode}.yaml'
-    elif args.device:
-        # 旧方式：向后兼容
-        print("⚠ 警告: --device 参数已弃用，请使用 --mode cpu 或 --mode gpu")
-        device_to_mode = {'pc': 'gpu', 'x390': 'cpu', 'jetson': 'gpu'}
-        mode = device_to_mode.get(args.device, 'cpu')
-        config_path = f'config/config_{mode}.yaml'
     else:
         # 默认使用CPU模式
         config_path = 'config/config_cpu.yaml'
