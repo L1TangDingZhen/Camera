@@ -179,11 +179,10 @@ class BehaviorStateMachine:
 
     def _check_keypoints_quality(self, keypoints: np.ndarray) -> bool:
         """检查关键点质量"""
-        # 至少需要肩膀、臀部、膝盖的点
+        # 至少需要肩膀和臀部（支持只看到上半身的场景）
         required_points = [
             Keypoint.LEFT_SHOULDER, Keypoint.RIGHT_SHOULDER,
             Keypoint.LEFT_HIP, Keypoint.RIGHT_HIP,
-            Keypoint.LEFT_KNEE, Keypoint.RIGHT_KNEE
         ]
 
         for idx in required_points:
@@ -222,6 +221,23 @@ class BehaviorStateMachine:
 
     def _is_sitting(self, keypoints: np.ndarray) -> bool:
         """判断是否坐着"""
+        # 检查是否有下半身关键点（膝盖、脚踝）
+        has_lower_body = (
+            keypoints[Keypoint.LEFT_KNEE, 2] > 0.3 and
+            keypoints[Keypoint.RIGHT_KNEE, 2] > 0.3 and
+            keypoints[Keypoint.LEFT_ANKLE, 2] > 0.3 and
+            keypoints[Keypoint.RIGHT_ANKLE, 2] > 0.3
+        )
+
+        if has_lower_body:
+            # 完整身体检测：使用原有逻辑
+            return self._is_sitting_full_body(keypoints)
+        else:
+            # 上半身检测：使用上半身特征判断（桌面摄像头场景）
+            return self._is_sitting_upper_body(keypoints)
+
+    def _is_sitting_full_body(self, keypoints: np.ndarray) -> bool:
+        """完整身体的sitting判断（能看到腿）"""
         # 1. 臀部高度在一定范围内（相对于身高）
         left_hip = keypoints[Keypoint.LEFT_HIP]
         right_hip = keypoints[Keypoint.RIGHT_HIP]
@@ -257,6 +273,41 @@ class BehaviorStateMachine:
         angle_threshold = self.sitting_config.get('knee_angle_max', 120)
 
         if avg_knee_angle < angle_threshold:
+            return True
+
+        return False
+
+    def _is_sitting_upper_body(self, keypoints: np.ndarray) -> bool:
+        """上半身的sitting判断（桌面摄像头，看不到腿）"""
+        # 1. 身体角度接近垂直（60-110度），排除躺着
+        body_angle = PoseUtils.get_body_orientation(keypoints)
+        if not (60 < body_angle < 110):
+            return False
+
+        # 2. 肩膀-臀部距离适中（排除站立）
+        left_shoulder = keypoints[Keypoint.LEFT_SHOULDER]
+        right_shoulder = keypoints[Keypoint.RIGHT_SHOULDER]
+        left_hip = keypoints[Keypoint.LEFT_HIP]
+        right_hip = keypoints[Keypoint.RIGHT_HIP]
+
+        shoulder_y = (left_shoulder[1] + right_shoulder[1]) / 2
+        hip_y = (left_hip[1] + right_hip[1]) / 2
+
+        # 肩-臀距离（像素）
+        shoulder_hip_dist = abs(hip_y - shoulder_y)
+
+        # 获取身体高度（肩膀到臀部的距离）
+        body_height = PoseUtils.get_body_height(keypoints)
+
+        # 肩-臀距离占总体高度的比例
+        # 坐着时这个比例应该适中（不会太小也不会太大）
+        # 站立时肩-臀距离会占较大比例（因为身体伸展）
+        # 躺着时身体角度已经排除了
+        ratio = shoulder_hip_dist / (body_height + 1e-6)
+
+        # 坐着时肩-臀距离大约占body_height的30-70%
+        # 这是一个经验阈值，可以根据实际情况调整
+        if 0.3 < ratio < 0.8:
             return True
 
         return False
