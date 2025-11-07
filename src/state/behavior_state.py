@@ -186,7 +186,7 @@ class BehaviorStateMachine:
 
     def _check_3d_quality(self, world_landmarks: np.ndarray) -> bool:
         """检查3D关键点质量"""
-        from .base import Keypoint
+        from ..detectors.base import Keypoint
 
         # 至少需要肩膀和臀部
         required_points = [
