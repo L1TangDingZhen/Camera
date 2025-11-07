@@ -90,7 +90,7 @@ class BehaviorStateMachine:
         print(f"[BehaviorStateMachine] 初始化完成")
 
     def update(self, bbox: Optional[np.ndarray], keypoints: Optional[np.ndarray],
-               timestamp: float) -> List[BehaviorEvent]:
+               timestamp: float, world_landmarks: Optional[np.ndarray] = None) -> List[BehaviorEvent]:
         """
         更新状态机
 
@@ -98,6 +98,7 @@ class BehaviorStateMachine:
             bbox: 人体边界框 [x1, y1, x2, y2, confidence]
             keypoints: 关键点 (17, 3) [x, y, confidence]
             timestamp: 时间戳
+            world_landmarks: 3D世界坐标 (17, 4) [x, y, z, visibility]，单位：米
 
         Returns:
             触发的事件列表
@@ -107,8 +108,8 @@ class BehaviorStateMachine:
         # 1. 更新zone
         self._update_zone(bbox)
 
-        # 2. 判断状态
-        new_state = self._classify_behavior(bbox, keypoints)
+        # 2. 判断状态（使用3D坐标优先）
+        new_state = self._classify_behavior(bbox, keypoints, world_landmarks)
 
         # 3. 检测状态变化
         if new_state != self.current_state:
@@ -150,13 +151,15 @@ class BehaviorStateMachine:
             self.current_zone = zones[0] if zones else None
 
     def _classify_behavior(self, bbox: Optional[np.ndarray],
-                          keypoints: Optional[np.ndarray]) -> BehaviorState:
+                          keypoints: Optional[np.ndarray],
+                          world_landmarks: Optional[np.ndarray] = None) -> BehaviorState:
         """
-        分类行为状态
+        分类行为状态（优先使用3D坐标）
 
         Args:
             bbox: 人体边界框
-            keypoints: 关键点
+            keypoints: 2D关键点
+            world_landmarks: 3D世界坐标
 
         Returns:
             行为状态
@@ -171,19 +174,170 @@ class BehaviorStateMachine:
             self.last_diagnosis = {'mode': 'unknown', 'reason': 'low_keypoint_quality'}
             return BehaviorState.UNKNOWN
 
-        # 先计算所有诊断特征（无论最终判断结果如何）
-        self._update_diagnosis(keypoints)
+        # 3. 优先使用3D world landmarks判断
+        if world_landmarks is not None and self._check_3d_quality(world_landmarks):
+            # 使用3D判断（更准确，不受摄像头角度影响）
+            self._update_diagnosis_3d(world_landmarks, keypoints)
+            return self._classify_3d(world_landmarks)
+        else:
+            # 降级到2D判断（兼容性）
+            self._update_diagnosis(keypoints)
+            return self._classify_2d(keypoints)
 
-        # 3. 判断躺姿
+    def _check_3d_quality(self, world_landmarks: np.ndarray) -> bool:
+        """检查3D关键点质量"""
+        from .base import Keypoint
+
+        # 至少需要肩膀和臀部
+        required_points = [
+            Keypoint.LEFT_SHOULDER, Keypoint.RIGHT_SHOULDER,
+            Keypoint.LEFT_HIP, Keypoint.RIGHT_HIP,
+        ]
+
+        for idx in required_points:
+            if world_landmarks[idx, 3] < 0.3:  # visibility阈值
+                return False
+
+        return True
+
+    def _classify_3d(self, world_landmarks: np.ndarray) -> BehaviorState:
+        """
+        使用3D坐标判断姿态（核心逻辑）
+
+        优先级：
+        1. LYING - 躯干接近水平
+        2. STANDING - 身体完全伸展
+        3. SITTING - 排除法（不是躺也不是站）
+        """
+        # 判断躺姿（优先级最高）
+        if self._is_lying_3d(world_landmarks):
+            return BehaviorState.LYING
+
+        # 判断站姿
+        if self._is_standing_3d(world_landmarks):
+            return BehaviorState.STANDING
+
+        # 排除法：不是躺也不是站 → 就是坐
+        # 这包容了所有坐姿变化：正坐、前倾、靠背、侧身等
+        return BehaviorState.SITTING
+
+    def _classify_2d(self, keypoints: np.ndarray) -> BehaviorState:
+        """使用2D坐标判断姿态（降级方案）"""
+        # 判断躺姿
         if self._is_lying(keypoints):
             return BehaviorState.LYING
 
-        # 4. 判断坐姿
+        # 判断坐姿
         if self._is_sitting(keypoints):
             return BehaviorState.SITTING
 
-        # 5. 默认为站立
+        # 默认为站立
         return BehaviorState.STANDING
+
+    def _update_diagnosis_3d(self, world_landmarks: np.ndarray, keypoints: np.ndarray):
+        """实时更新3D诊断信息"""
+        from ..detectors.base import Keypoint
+
+        # 提取关键关节的3D坐标
+        left_shoulder = world_landmarks[Keypoint.LEFT_SHOULDER]
+        right_shoulder = world_landmarks[Keypoint.RIGHT_SHOULDER]
+        left_hip = world_landmarks[Keypoint.LEFT_HIP]
+        right_hip = world_landmarks[Keypoint.RIGHT_HIP]
+
+        shoulder_center = (left_shoulder[:3] + right_shoulder[:3]) / 2
+        hip_center = (left_hip[:3] + right_hip[:3]) / 2
+
+        # 躯干向量（从臀部指向肩膀）
+        torso_vector = shoulder_center - hip_center
+        torso_length = np.linalg.norm(torso_vector)
+
+        # 躯干与重力方向（Y轴负方向）的夹角
+        gravity_vector = np.array([0, -1, 0])  # Y轴向下是重力方向
+        if torso_length > 0:
+            torso_normalized = torso_vector / torso_length
+            # 计算夹角（度）
+            dot_product = np.dot(torso_normalized, gravity_vector)
+            dot_product = np.clip(dot_product, -1.0, 1.0)
+            torso_angle = np.degrees(np.arccos(abs(dot_product)))
+        else:
+            torso_angle = 0
+
+        # 检查是否有腿部关键点
+        has_legs = (
+            world_landmarks[Keypoint.LEFT_KNEE, 3] > 0.5 and
+            world_landmarks[Keypoint.RIGHT_KNEE, 3] > 0.5
+        )
+
+        diagnosis = {
+            'mode': '3d',
+            'torso_angle': torso_angle,  # 躯干倾斜角度（0=垂直，90=水平）
+            'torso_length': torso_length * 100,  # 转换为厘米显示
+            'has_legs': has_legs,
+        }
+
+        # 如果有腿部，计算更多特征
+        if has_legs:
+            left_knee = world_landmarks[Keypoint.LEFT_KNEE]
+            right_knee = world_landmarks[Keypoint.RIGHT_KNEE]
+            knee_center = (left_knee[:3] + right_knee[:3]) / 2
+
+            # 臀部和膝盖的Z轴（深度）差异
+            hip_knee_z_diff = hip_center[2] - knee_center[2]  # 米
+
+            # 臀部到膝盖的3D距离
+            hip_knee_dist = np.linalg.norm(hip_center - knee_center)
+
+            diagnosis.update({
+                'hip_knee_z_diff': hip_knee_z_diff * 100,  # 厘米
+                'hip_knee_dist': hip_knee_dist * 100,  # 厘米
+            })
+
+            # 判断依据
+            diagnosis.update({
+                'lying_check': torso_angle > 60,  # 躺：躯干接近水平
+                'standing_check': hip_knee_z_diff < 0.05 and hip_knee_dist > 0.35,  # 站：同一平面且伸展
+            })
+
+        self.last_diagnosis = diagnosis
+
+    def _is_lying_3d(self, world_landmarks: np.ndarray) -> bool:
+        """判断是否躺着（3D）"""
+        # 躯干角度 > 60度（接近水平）
+        torso_angle = self.last_diagnosis.get('torso_angle', 0)
+        return torso_angle > 60
+
+    def _is_standing_3d(self, world_landmarks: np.ndarray) -> bool:
+        """判断是否站立（3D）"""
+        from ..detectors.base import Keypoint
+
+        # 检查是否有腿部关键点
+        if not self.last_diagnosis.get('has_legs', False):
+            # 没有腿部信息，无法判断standing
+            # 返回False，会被归类为sitting（排除法）
+            return False
+
+        left_hip = world_landmarks[Keypoint.LEFT_HIP]
+        right_hip = world_landmarks[Keypoint.RIGHT_HIP]
+        left_knee = world_landmarks[Keypoint.LEFT_KNEE]
+        right_knee = world_landmarks[Keypoint.RIGHT_KNEE]
+
+        hip_center = (left_hip[:3] + right_hip[:3]) / 2
+        knee_center = (left_knee[:3] + right_knee[:3]) / 2
+
+        # 条件1：臀部和膝盖在Z轴（深度）上接近（同一平面）
+        hip_knee_z_diff = abs(hip_center[2] - knee_center[2])
+        z_aligned = hip_knee_z_diff < 0.05  # 小于5厘米
+
+        # 条件2：臀部到膝盖的3D距离 > 35厘米（身体伸展）
+        hip_knee_dist = np.linalg.norm(hip_center - knee_center)
+        body_extended = hip_knee_dist > 0.35  # 米
+
+        # 条件3：躯干接近垂直（< 45度）
+        torso_angle = self.last_diagnosis.get('torso_angle', 0)
+        torso_upright = torso_angle < 45
+
+        # 三个条件都满足 → 站立
+        return z_aligned and body_extended and torso_upright
 
     def _update_diagnosis(self, keypoints: np.ndarray):
         """实时更新诊断信息（每帧都调用）"""

@@ -62,6 +62,9 @@ class MediaPipePoseEstimator(PoseEstimatorInterface):
 
         self.inference_times = []
 
+        # 存储最近的3D world landmarks
+        self.last_world_landmarks = None
+
         print(f"[MediaPipePose] 初始化完成，complexity={self.complexity}")
 
     def estimate(self, frame: np.ndarray, bbox: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
@@ -94,9 +97,27 @@ class MediaPipePoseEstimator(PoseEstimatorInterface):
 
             # 提取关键点
             if results.pose_landmarks is None:
+                self.last_world_landmarks = None
                 return None
 
-            # 转换为COCO-17格式
+            # 提取3D world landmarks (单位：米，以髋部为原点)
+            if results.pose_world_landmarks is not None:
+                world_landmarks_3d = np.zeros((17, 4), dtype=np.float32)  # (x, y, z, visibility)
+
+                for mp_idx, coco_idx in self.mediapipe_to_coco.items():
+                    wl = results.pose_world_landmarks.landmark[mp_idx]
+                    world_landmarks_3d[coco_idx] = [
+                        wl.x,  # 米
+                        wl.y,  # 米
+                        wl.z,  # 米
+                        wl.visibility
+                    ]
+
+                self.last_world_landmarks = world_landmarks_3d
+            else:
+                self.last_world_landmarks = None
+
+            # 转换为COCO-17格式（2D图像坐标）
             h, w = roi.shape[:2]
             keypoints = np.zeros((17, 3), dtype=np.float32)
 
@@ -113,6 +134,17 @@ class MediaPipePoseEstimator(PoseEstimatorInterface):
         except Exception as e:
             print(f"[MediaPipePose] 估计失败: {e}")
             return None
+
+    def get_world_landmarks(self) -> Optional[np.ndarray]:
+        """
+        获取3D world landmarks（真实空间坐标）
+
+        Returns:
+            world_landmarks: (17, 4) [x, y, z, visibility]
+                           单位：米，以人体髋部为原点
+                           None 如果最近一次估计失败
+        """
+        return self.last_world_landmarks
 
     def get_keypoint_names(self) -> List[str]:
         return Keypoint.NAMES

@@ -141,17 +141,21 @@ class LifeTracker:
                 # 2. 姿态估计
                 t0 = time.time()
                 keypoints = None
+                world_landmarks = None
                 if bbox is not None:
                     keypoints = self.pose_estimator.estimate(frame, bbox)
+                    # 获取3D world landmarks（如果支持）
+                    if hasattr(self.pose_estimator, 'get_world_landmarks'):
+                        world_landmarks = self.pose_estimator.get_world_landmarks()
                 t1 = time.time()
                 profiling_data['pose'].append((t1 - t0) * 1000)
 
                 # 保存关键点用于调试显示
                 self._last_keypoints = keypoints
 
-                # 3. 更新状态机
+                # 3. 更新状态机（使用3D坐标）
                 t0 = time.time()
-                events = self.state_machine.update(bbox, keypoints, current_time)
+                events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
                 t1 = time.time()
                 profiling_data['state_machine'].append((t1 - t0) * 1000)
 
@@ -354,7 +358,45 @@ class LifeTracker:
                     y_offset += 18
 
                     # 根据模式显示不同的诊断信息
-                    if mode == 'upper_body':
+                    if mode == '3d':
+                        # 3D模式：显示真实3D特征
+                        if 'torso_angle' in diagnosis:
+                            torso_angle = diagnosis['torso_angle']
+                            color = (0, 255, 255)  # 黄色
+                            cv2.putText(frame, f"TorsoAngle: {torso_angle:.1f}deg (0=upright, 90=horizontal)",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                        if 'hip_knee_z_diff' in diagnosis:
+                            z_diff = diagnosis['hip_knee_z_diff']
+                            color = (0, 255, 255)
+                            cv2.putText(frame, f"Hip-Knee Z: {z_diff:.1f}cm (>0=sitting, ~0=standing)",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                        if 'hip_knee_dist' in diagnosis:
+                            dist = diagnosis['hip_knee_dist']
+                            color = (0, 255, 255)
+                            cv2.putText(frame, f"Hip-Knee Dist: {dist:.1f}cm (>35=extended)",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                        # 显示判断结果
+                        if 'lying_check' in diagnosis:
+                            lying = diagnosis['lying_check']
+                            color = (0, 255, 0) if lying else (128, 128, 128)
+                            cv2.putText(frame, f"Lying: {'YES' if lying else 'NO'}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                        if 'standing_check' in diagnosis:
+                            standing = diagnosis['standing_check']
+                            color = (0, 255, 0) if standing else (128, 128, 128)
+                            cv2.putText(frame, f"Standing: {'YES' if standing else 'NO'}",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                            y_offset += 18
+
+                    elif mode == 'upper_body':
                         # 上半身模式：显示 body_angle 和 shoulder_hip_ratio
                         if 'body_angle' in diagnosis:
                             angle = diagnosis['body_angle']
