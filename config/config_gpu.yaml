@@ -10,14 +10,14 @@ hardware:
 
 models:
   person:
-    model: yolov8s.pt  # 标准模型，GPU上性能好
+    model: yolov8m.pt  # 中等模型，精度更高（若性能不足可改回yolov8s.pt）
     device: cuda:0
     confidence: 0.5
     iou: 0.45
 
   pose:
     backend: mediapipe  # 暂时用MediaPipe，后续可改成rtmpose
-    complexity: 1  # 1=Full（平衡）
+    complexity: 2  # 2=Heavy（最高精度），GPU模式追求精度
     device: cpu  # MediaPipe不支持GPU，用CPU
     confidence: 0.3
     # 注意：如果安装了mmpose，可以改成：
@@ -28,12 +28,13 @@ models:
 camera:
   source: 0  # 0=默认摄像头, 或视频文件路径
   fps: 30  # GPU模式支持高帧率
-  resolution: [640, 480]  # 标准分辨率
+  resolution: [1280, 720]  # 720p高清（若性能不足可改回640x480）
   flip: false
   rotation: 0
 
 inference:
   skip_frames: 0
+  detection_interval: 1  # GPU模式每帧都检测（不跳帧）
   max_buffer_size: 150
 
 roi:
