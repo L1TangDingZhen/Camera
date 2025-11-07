@@ -17,7 +17,7 @@ models:
 
   pose:
     backend: mediapipe  # 暂时用MediaPipe，后续可改成rtmpose
-    complexity: 2  # 2=Heavy（最高精度），GPU模式追求精度
+    complexity: 1  # 1=Full（平衡），2太慢了（69ms）
     device: cpu  # MediaPipe不支持GPU，用CPU
     confidence: 0.3
     # 注意：如果安装了mmpose，可以改成：
@@ -28,7 +28,7 @@ models:
 camera:
   source: 0  # 0=默认摄像头, 或视频文件路径
   fps: 30  # GPU模式支持高帧率
-  resolution: [1280, 720]  # 720p高清（若性能不足可改回640x480）
+  resolution: [640, 480]  # 改回标准分辨率（720p太慢，读帧24ms）
   flip: false
   rotation: 0
 
