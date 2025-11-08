@@ -106,6 +106,12 @@ class LifeTracker:
             'total_frame': []
         }
 
+        # 创建可调整大小的窗口
+        if self.show_visualization:
+            cv2.namedWindow('Life Tracker', cv2.WINDOW_NORMAL)
+            # 设置默认窗口大小（可以根据需要调整）
+            cv2.resizeWindow('Life Tracker', 1280, 720)
+
         try:
             while self.running:
                 frame_start = time.time()
