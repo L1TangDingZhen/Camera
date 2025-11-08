@@ -13,6 +13,14 @@ import numpy as np
 from ..detectors.base import Keypoint, PoseUtils
 from .roi_manager import ROIManager
 
+# 尝试导入SVM分类器（可选）
+try:
+    from ..classifiers.pose_classifier import PoseClassifierSVM
+    SVM_AVAILABLE = True
+except ImportError:
+    SVM_AVAILABLE = False
+    print("[WARN] SVM分类器模块未找到，将使用基于规则的分类方法")
+
 
 class BehaviorState(Enum):
     """行为状态"""
@@ -86,6 +94,13 @@ class BehaviorStateMachine:
 
         # 诊断信息（用于调试）
         self.last_diagnosis: Dict = {}
+
+        # SVM分类器（可选）
+        self.svm_classifier = None
+        self.last_probabilities: Optional[Dict[str, float]] = None
+        if SVM_AVAILABLE:
+            model_path = config.get('behavior', {}).get('svm_model_path', 'models/pose_classifier_svm.pkl')
+            self.svm_classifier = PoseClassifierSVM(model_path)
 
         print(f"[BehaviorStateMachine] 初始化完成")
 
@@ -205,10 +220,33 @@ class BehaviorStateMachine:
         使用3D坐标判断姿态（核心逻辑）
 
         优先级：
-        1. LYING - 躯干接近水平
-        2. STANDING - 身体完全伸展
-        3. SITTING - 排除法（不是躺也不是站）
+        1. 如果有SVM模型，优先使用SVM分类（概率预测）
+        2. 否则降级到基于规则的分类：
+           - LYING - 躯干接近水平
+           - STANDING - 身体完全伸展
+           - SITTING - 排除法（不是躺也不是站）
         """
+        # 优先使用SVM分类器
+        if self.svm_classifier is not None and self.svm_classifier.is_loaded:
+            probs = self.svm_classifier.predict_proba(world_landmarks)
+            if probs is not None:
+                self.last_probabilities = probs  # 存储概率用于显示
+
+                # 根据最高概率确定状态
+                predicted_label = max(probs, key=probs.get)
+
+                # 转换为BehaviorState枚举
+                state_mapping = {
+                    'sitting': BehaviorState.SITTING,
+                    'standing': BehaviorState.STANDING,
+                    'lying': BehaviorState.LYING
+                }
+
+                return state_mapping.get(predicted_label, BehaviorState.UNKNOWN)
+
+        # 降级方案：基于规则的分类
+        self.last_probabilities = None  # 清除概率
+
         # 判断躺姿（优先级最高）
         if self._is_lying_3d(world_landmarks):
             return BehaviorState.LYING

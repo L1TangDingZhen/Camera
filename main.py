@@ -396,6 +396,37 @@ class LifeTracker:
                                        (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
                             y_offset += 18
 
+                        # 显示SVM概率分布（如果可用）
+                        if hasattr(self.state_machine, 'last_probabilities') and self.state_machine.last_probabilities:
+                            y_offset += 10  # 增加间距
+                            cv2.putText(frame, "SVM Probabilities:",
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                            y_offset += 20
+
+                            probs = self.state_machine.last_probabilities
+                            # 按概率降序排列
+                            sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+
+                            for label, prob in sorted_probs:
+                                # 颜色：概率高用绿色，低用灰色
+                                if prob > 0.5:
+                                    color = (0, 255, 0)  # 绿色
+                                elif prob > 0.3:
+                                    color = (0, 255, 255)  # 黄色
+                                else:
+                                    color = (128, 128, 128)  # 灰色
+
+                                # 绘制概率条
+                                bar_width = int(prob * 150)  # 最大150像素
+                                cv2.rectangle(frame, (120, y_offset - 10), (120 + bar_width, y_offset + 5),
+                                            color, -1)
+
+                                # 显示文本
+                                text = f"{label.capitalize()}: {prob:.2f}"
+                                cv2.putText(frame, text, (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX,
+                                          0.4, color, 1)
+                                y_offset += 18
+
                     elif mode == 'upper_body':
                         # 上半身模式：显示 body_angle 和 shoulder_hip_ratio
                         if 'body_angle' in diagnosis:
