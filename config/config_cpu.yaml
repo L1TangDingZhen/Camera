@@ -65,10 +65,10 @@ behavior:
     still_duration: 300  # 秒，持续不动视为睡眠
     motion_threshold: 0.02  # 运动阈值
 
-  # 事件判断（增加防抖）
+  # 事件判断
   events:
-    enter_duration: 5  # 进入区域持续时间（增加到5秒减少误判）
-    leave_duration: 5  # 离开区域持续时间
+    enter_duration: 2  # 降低到2秒，减少状态切换延迟
+    leave_duration: 2
     night_start: "22:00"
     night_end: "06:00"
 

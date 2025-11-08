@@ -311,9 +311,14 @@ class BehaviorStateMachine:
         from ..detectors.base import Keypoint
 
         # 检查是否有腿部关键点
-        if not self.last_diagnosis.get('has_legs', False):
-            # 没有腿部信息，无法判断standing
-            # 返回False，会被归类为sitting（排除法）
+        has_legs = self.last_diagnosis.get('has_legs', False)
+
+        if not has_legs:
+            # 没有腿部信息，用躯干角度判断
+            # 如果躯干非常垂直（<20度），可能是站立
+            torso_angle = self.last_diagnosis.get('torso_angle', 0)
+            # 但不能仅凭躯干角度判断，返回False让它进入sitting判断
+            # （坐着时躯干也可以很垂直）
             return False
 
         left_hip = world_landmarks[Keypoint.LEFT_HIP]
@@ -325,12 +330,13 @@ class BehaviorStateMachine:
         knee_center = (left_knee[:3] + right_knee[:3]) / 2
 
         # 条件1：臀部和膝盖在Z轴（深度）上接近（同一平面）
-        hip_knee_z_diff = abs(hip_center[2] - knee_center[2])
-        z_aligned = hip_knee_z_diff < 0.05  # 小于5厘米
+        hip_knee_z_diff = hip_center[2] - knee_center[2]  # 不用abs，保留正负
+        # 站立时：膝盖在臀部前方（z_diff < 0）或接近（abs < 5cm）
+        z_aligned = abs(hip_knee_z_diff) < 0.08  # 放宽到8厘米
 
-        # 条件2：臀部到膝盖的3D距离 > 35厘米（身体伸展）
+        # 条件2：臀部到膝盖的3D距离 > 30厘米（身体伸展）
         hip_knee_dist = np.linalg.norm(hip_center - knee_center)
-        body_extended = hip_knee_dist > 0.35  # 米
+        body_extended = hip_knee_dist > 0.30  # 降低到30cm（用户数据33.9cm）
 
         # 条件3：躯干接近垂直（< 45度）
         torso_angle = self.last_diagnosis.get('torso_angle', 0)
