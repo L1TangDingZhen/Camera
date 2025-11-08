@@ -451,6 +451,134 @@ async function updateAnomalyDetection() {
     }
 }
 
+// 更新智能行为预测
+async function updateBehaviorPrediction() {
+    try {
+        // 获取当前状态
+        const currentResponse = await fetch('/api/stats/current');
+        const currentResult = await currentResponse.json();
+
+        let currentState = 'unknown';
+        if (currentResult.success && currentResult.has_session && currentResult.data) {
+            currentState = currentResult.data.state;
+        }
+
+        // 获取预测
+        const predictionResponse = await fetch('/api/behavior/predict_current_state');
+        const predictionResult = await predictionResponse.json();
+
+        // 获取建议
+        const suggestionResponse = await fetch(`/api/behavior/smart_suggestion?current_state=${currentState}`);
+        const suggestionResult = await suggestionResponse.json();
+
+        const content = document.getElementById('behaviorPredictionContent');
+
+        if (predictionResult.success && suggestionResult.success) {
+            const prediction = predictionResult.data;
+            const suggestion = suggestionResult.data;
+
+            const stateIcons = {
+                'sitting': '🪑',
+                'standing': '🧍',
+                'lying': '🛏️',
+                'sleeping': '😴',
+                'unknown': '❓'
+            };
+
+            const stateNames = {
+                'sitting': '坐姿',
+                'standing': '站立',
+                'lying': '躺卧',
+                'sleeping': '睡眠',
+                'unknown': '未知'
+            };
+
+            let matchIcon = suggestion.match ? '✅' : '💡';
+            let matchClass = suggestion.match ? 'match' : 'mismatch';
+
+            content.innerHTML = `
+                <div class="behavior-prediction">
+                    <div class="prediction-row">
+                        <div class="prediction-item-behavior">
+                            <h4>📊 根据历史规律</h4>
+                            <p class="prediction-value-behavior">
+                                ${stateIcons[prediction.predicted_state]} ${stateNames[prediction.predicted_state]}
+                            </p>
+                            <p class="prediction-confidence">置信度: ${(prediction.confidence * 100).toFixed(0)}%</p>
+                            <p class="prediction-explanation">${prediction.explanation}</p>
+                        </div>
+                        <div class="prediction-item-behavior">
+                            <h4>🎯 当前实际状态</h4>
+                            <p class="prediction-value-behavior">
+                                ${stateIcons[currentState]} ${stateNames[currentState]}
+                            </p>
+                            <p class="prediction-match ${matchClass}">
+                                ${matchIcon} ${suggestion.match ? '符合习惯' : '与习惯不符'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="smart-suggestion ${suggestion.priority}">
+                        <p>${suggestion.message}</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `<p>📊 累积更多数据后将提供智能行为预测...</p>`;
+        }
+    } catch (error) {
+        console.error('获取行为预测失败:', error);
+        document.getElementById('behaviorPredictionContent').innerHTML =
+            `<p>暂时无法获取行为预测</p>`;
+    }
+}
+
+// 更新日常作息
+async function updateDailyRoutine() {
+    try {
+        const response = await fetch('/api/behavior/daily_routine');
+        const result = await response.json();
+
+        const content = document.getElementById('routineContent');
+
+        if (result.success && result.data.routine) {
+            const routine = result.data;
+
+            const stateNames = {
+                'sitting': '坐姿工作',
+                'standing': '站立活动',
+                'lying': '躺卧休息',
+                'sleeping': '睡眠',
+                'unknown': '活动未知'
+            };
+
+            let routineHTML = '<div class="routine-timeline">';
+            routine.routine.forEach(item => {
+                const stateName = stateNames[item.typical_state] || item.typical_state;
+                const confidence = (item.confidence * 100).toFixed(0);
+
+                routineHTML += `
+                    <div class="routine-item">
+                        <div class="routine-time">${item.time_range}</div>
+                        <div class="routine-state">${stateName}</div>
+                        <div class="routine-bar" style="width: ${confidence}%"></div>
+                    </div>
+                `;
+            });
+            routineHTML += '</div>';
+            routineHTML += `<p class="routine-summary">${routine.summary}</p>`;
+            routineHTML += `<p class="routine-note">基于${routine.analysis_period}的数据分析</p>`;
+
+            content.innerHTML = routineHTML;
+        } else {
+            content.innerHTML = `<p>累积更多数据后将生成作息总结...</p>`;
+        }
+    } catch (error) {
+        console.error('获取日常作息失败:', error);
+        document.getElementById('routineContent').innerHTML =
+            `<p>暂时无法获取作息数据</p>`;
+    }
+}
+
 // 刷新所有数据
 async function refreshAllData() {
     await Promise.all([
@@ -460,7 +588,9 @@ async function refreshAllData() {
         checkProlongedSitting(),
         updateWeeklyTrendChart(),
         updatePredictions(),
-        updateAnomalyDetection()
+        updateAnomalyDetection(),
+        updateBehaviorPrediction(),
+        updateDailyRoutine()
     ]);
 
     updateLastUpdateTime();

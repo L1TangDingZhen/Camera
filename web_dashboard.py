@@ -10,6 +10,7 @@ from flask_cors import CORS
 from src.storage.database import Database
 from src.analytics.session_tracker import SessionTracker
 from src.analytics.predictor import SittingPredictor, SmartReminder
+from src.analytics.behavior_predictor import SmartBehaviorSuggestion
 from datetime import datetime, timedelta
 import os
 
@@ -21,10 +22,11 @@ db = None
 tracker = None
 predictor = None
 smart_reminder = None
+behavior_suggestion = None
 
 def init_db():
     """初始化数据库连接"""
-    global db, tracker, predictor, smart_reminder
+    global db, tracker, predictor, smart_reminder, behavior_suggestion
     db_path = 'data/database.db'
 
     if not os.path.exists(db_path):
@@ -35,8 +37,10 @@ def init_db():
     tracker = SessionTracker(database=db)
     predictor = SittingPredictor(database=db)
     smart_reminder = SmartReminder(predictor)
+    behavior_suggestion = SmartBehaviorSuggestion(database=db)
     print(f"[Web Dashboard] 数据库已连接: {db_path}")
     print(f"[Web Dashboard] 预测模块已启用")
+    print(f"[Web Dashboard] 智能行为预测已启用")
 
 @app.route('/')
 def index():
@@ -202,6 +206,74 @@ def detect_anomaly():
         return jsonify({
             'success': True,
             'data': anomaly
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/behavior/predict_current_state')
+def predict_current_state():
+    """API: 预测当前时间应该处于什么状态"""
+    try:
+        prediction = behavior_suggestion.predictor.predict_current_state()
+        return jsonify({
+            'success': True,
+            'data': prediction
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/behavior/smart_suggestion')
+def get_smart_suggestion():
+    """API: 获取智能行为建议"""
+    try:
+        # 获取当前状态（从请求参数）
+        current_state = request.args.get('current_state', 'unknown')
+
+        # 如果没有提供当前状态，尝试从tracker获取
+        if current_state == 'unknown' and tracker.current_session:
+            current_state = tracker.current_session.state
+
+        suggestion = behavior_suggestion.get_smart_suggestion(current_state)
+        return jsonify({
+            'success': True,
+            'data': suggestion
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/behavior/daily_routine')
+def get_daily_routine():
+    """API: 获取日常作息总结"""
+    try:
+        routine = behavior_suggestion.get_daily_routine_summary()
+        return jsonify({
+            'success': True,
+            'data': routine
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/behavior/hourly_patterns')
+def get_hourly_patterns():
+    """API: 获取每小时行为模式"""
+    try:
+        days = int(request.args.get('days', 14))
+        patterns = behavior_suggestion.analyzer.analyze_hourly_patterns(days=days)
+        return jsonify({
+            'success': True,
+            'data': patterns
         })
     except Exception as e:
         return jsonify({

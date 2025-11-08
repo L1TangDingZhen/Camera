@@ -327,6 +327,151 @@ body {
     color: #28a745;
 }
 
+/* 智能行为预测卡片 */
+.behavior-prediction-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.behavior-prediction-card h2 {
+    color: white;
+    border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.behavior-prediction {
+    margin-top: 15px;
+}
+
+.prediction-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.prediction-item-behavior {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 20px;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    text-align: center;
+}
+
+.prediction-item-behavior h4 {
+    font-size: 0.95rem;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.prediction-value-behavior {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 15px 0;
+}
+
+.prediction-explanation {
+    font-size: 0.9rem;
+    margin-top: 10px;
+    opacity: 0.85;
+    line-height: 1.5;
+}
+
+.prediction-match {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.prediction-match.match {
+    color: #4caf50;
+}
+
+.prediction-match.mismatch {
+    color: #ffc107;
+}
+
+.smart-suggestion {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 15px 20px;
+    border-radius: 8px;
+    border-left: 5px solid;
+    backdrop-filter: blur(10px);
+}
+
+.smart-suggestion.low {
+    border-left-color: #4caf50;
+}
+
+.smart-suggestion.medium {
+    border-left-color: #ffc107;
+}
+
+.smart-suggestion.high {
+    border-left-color: #f44336;
+}
+
+.smart-suggestion p {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+/* 日常作息卡片 */
+.routine-card {
+    background: white;
+}
+
+.routine-timeline {
+    margin-top: 15px;
+}
+
+.routine-item {
+    display: grid;
+    grid-template-columns: 100px 150px 1fr;
+    gap: 15px;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+}
+
+.routine-time {
+    font-weight: bold;
+    color: #667eea;
+    font-size: 0.95rem;
+}
+
+.routine-state {
+    color: #333;
+    font-size: 0.95rem;
+}
+
+.routine-bar {
+    height: 8px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.routine-summary {
+    margin-top: 20px;
+    padding: 15px;
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.routine-note {
+    text-align: right;
+    font-size: 0.85rem;
+    color: #999;
+    margin-top: 10px;
+}
+
 /* 页脚 */
 .footer {
     text-align: center;
