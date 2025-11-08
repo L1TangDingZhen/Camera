@@ -49,13 +49,13 @@ class LifeTracker:
         print("[初始化] 加载ROI管理器...")
         self.roi_manager = ROIManager(self.config.get('roi', {}))
 
-        # 3. 创建状态机
-        print("[初始化] 创建状态机...")
-        self.state_machine = BehaviorStateMachine(self.config, self.roi_manager)
-
-        # 4. 创建事件记录器
+        # 3. 创建事件记录器
         print("[初始化] 创建事件记录器...")
         self.event_logger = EventLogger(self.config)
+
+        # 4. 创建状态机（传入database用于SessionTracker）
+        print("[初始化] 创建状态机...")
+        self.state_machine = BehaviorStateMachine(self.config, self.roi_manager, database=self.event_logger.db)
 
         # 5. 初始化摄像头
         print("[初始化] 打开摄像头...")

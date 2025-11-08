@@ -21,6 +21,14 @@ except ImportError:
     SVM_AVAILABLE = False
     print("[WARN] SVM分类器模块未找到，将使用基于规则的分类方法")
 
+# 导入SessionTracker
+try:
+    from ..analytics.session_tracker import SessionTracker
+    SESSION_TRACKER_AVAILABLE = True
+except ImportError:
+    SESSION_TRACKER_AVAILABLE = False
+    print("[WARN] SessionTracker模块未找到，时长统计功能将不可用")
+
 
 class BehaviorState(Enum):
     """行为状态"""
@@ -63,11 +71,12 @@ class BehaviorEvent:
 class BehaviorStateMachine:
     """行为状态机"""
 
-    def __init__(self, config: dict, roi_manager: Optional[ROIManager] = None):
+    def __init__(self, config: dict, roi_manager: Optional[ROIManager] = None, database=None):
         """
         Args:
             config: 配置字典
             roi_manager: ROI管理器
+            database: Database实例（用于SessionTracker）
         """
         self.config = config
         self.roi_manager = roi_manager or ROIManager(config.get('roi', {}))
@@ -102,6 +111,12 @@ class BehaviorStateMachine:
             model_path = config.get('behavior', {}).get('svm_model_path', 'models/pose_classifier_svm.pkl')
             self.svm_classifier = PoseClassifierSVM(model_path)
 
+        # SessionTracker（时长统计）
+        self.session_tracker = None
+        if SESSION_TRACKER_AVAILABLE:
+            self.session_tracker = SessionTracker(database=database)
+            print(f"[BehaviorStateMachine] SessionTracker已启用")
+
         print(f"[BehaviorStateMachine] 初始化完成")
 
     def update(self, bbox: Optional[np.ndarray], keypoints: Optional[np.ndarray],
@@ -130,6 +145,10 @@ class BehaviorStateMachine:
         if new_state != self.current_state:
             state_events = self._handle_state_change(new_state, timestamp)
             events.extend(state_events)
+
+        # 3.5 更新会话跟踪（时长统计）
+        if self.session_tracker is not None:
+            self.session_tracker.update_session(self.current_state, timestamp, self.current_zone)
 
         # 4. 检测zone变化
         if self.current_zone != self.previous_zone:
