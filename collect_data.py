@@ -177,8 +177,8 @@ class DataCollector:
         cv2.putText(frame, text, (text_x, text_y), font, font_scale, (0, 255, 255), thickness)
 
         # 提示文字
-        pose_name = {"sitting": "坐姿", "standing": "站姿", "lying": "躺姿"}.get(self.current_pose_label, "")
-        hint = f"准备录制: {pose_name}"
+        pose_name = {"sitting": "Sitting", "standing": "Standing", "lying": "Lying"}.get(self.current_pose_label, "")
+        hint = f"Preparing to record: {pose_name}"
         cv2.putText(frame, hint, (w//4 + 20, h//4 + 60), font, 1.5, (255, 255, 255), 2)
 
         return frame
@@ -191,23 +191,23 @@ class DataCollector:
         cv2.circle(frame, (30, 30), 15, (0, 0, 255), -1)
 
         # 录制信息
-        pose_name = {"sitting": "坐姿", "standing": "站姿", "lying": "躺姿"}.get(self.current_pose_label, "")
-        text = f"正在录制: {pose_name}"
+        pose_name = {"sitting": "Sitting", "standing": "Standing", "lying": "Lying"}.get(self.current_pose_label, "")
+        text = f"Recording: {pose_name}"
         cv2.putText(frame, text, (60, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
 
         # 时长
-        time_text = f"已录: {elapsed:.1f}s"
+        time_text = f"Elapsed: {elapsed:.1f}s"
         if elapsed < self.min_duration:
-            time_text += f" / 建议: {self.min_duration}s"
+            time_text += f" / Target: {self.min_duration}s"
             color = (0, 165, 255)  # 橙色
         else:
-            time_text += " (可按q停止)"
+            time_text += " (Press 'q' to stop)"
             color = (0, 255, 0)  # 绿色
 
         cv2.putText(frame, time_text, (60, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
         # 样本数
-        sample_text = f"已采集: {len(self.collected_samples)} 帧"
+        sample_text = f"Samples collected: {len(self.collected_samples)} frames"
         cv2.putText(frame, sample_text, (60, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
         return frame
@@ -217,14 +217,14 @@ class DataCollector:
         h, w = frame.shape[:2]
 
         instructions = [
-            "操作说明:",
-            "  's' - 录制坐姿 (Sitting)",
-            "  't' - 录制站姿 (Standing)",
-            "  'l' - 录制躺姿 (Lying)",
-            "  'q' - 停止录制",
-            "  'ESC' - 退出程序",
+            "Instructions:",
+            "  's' - Record Sitting pose",
+            "  't' - Record Standing pose",
+            "  'l' - Record Lying pose",
+            "  'q' - Stop recording",
+            "  'ESC' - Exit program",
             "",
-            f"已保存数据: {self._count_saved_samples()} 条"
+            f"Saved samples: {self._count_saved_samples()}"
         ]
 
         y_offset = h - 250
@@ -250,7 +250,7 @@ class DataCollector:
         self.current_pose_label = pose_label
         self.record_start_time = None  # 倒计时结束后才设置
         self.collected_samples = []
-        print(f"\n[INFO] 准备录制 {pose_label}，倒计时 {self.countdown} 秒...")
+        print(f"\n[INFO] Preparing to record {pose_label}, countdown {self.countdown} seconds...")
 
     def stop_recording(self):
         """停止录制并保存"""
@@ -260,7 +260,7 @@ class DataCollector:
         self.is_recording = False
 
         if len(self.collected_samples) == 0:
-            print("[WARN] 没有采集到有效样本")
+            print("[WARN] No valid samples collected")
             return
 
         # 保存到文件
@@ -279,8 +279,8 @@ class DataCollector:
         with open(filepath, 'w') as f:
             json.dump(existing_data, f)
 
-        print(f"[INFO] 已保存 {len(self.collected_samples)} 个样本到 {filepath}")
-        print(f"[INFO] 该姿态总样本数: {len(existing_data)}")
+        print(f"[INFO] Saved {len(self.collected_samples)} samples to {filepath}")
+        print(f"[INFO] Total samples for {self.current_pose_label}: {len(existing_data)}")
 
         self.current_pose_label = None
         self.collected_samples = []
@@ -292,14 +292,14 @@ class DataCollector:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         print("=" * 60)
-        print("数据录制工具已启动")
+        print("Data Collection Tool Started")
         print("=" * 60)
-        print("按键说明:")
-        print("  's' - 录制坐姿")
-        print("  't' - 录制站姿")
-        print("  'l' - 录制躺姿")
-        print("  'q' - 停止当前录制")
-        print("  'ESC' - 退出程序")
+        print("Key Controls:")
+        print("  's' - Record Sitting pose")
+        print("  't' - Record Standing pose")
+        print("  'l' - Record Lying pose")
+        print("  'q' - Stop current recording")
+        print("  'ESC' - Exit program")
         print("=" * 60)
 
         countdown_start_time = None
@@ -335,7 +335,7 @@ class DataCollector:
                     countdown_start_time = None
                     self.is_recording = True
                     self.record_start_time = current_time
-                    print(f"[INFO] 开始录制 {self.current_pose_label}!")
+                    print(f"[INFO] Recording {self.current_pose_label} started!")
 
             # 录制阶段
             elif self.is_recording:
@@ -391,7 +391,7 @@ class DataCollector:
                     # 取消倒计时
                     countdown_start_time = None
                     self.current_pose_label = None
-                    print("[INFO] 已取消录制")
+                    print("[INFO] Recording cancelled")
                 elif self.is_recording:
                     # 停止录制
                     self.stop_recording()
@@ -400,16 +400,16 @@ class DataCollector:
         cv2.destroyAllWindows()
         self.pose.close()
 
-        print("\n[INFO] 数据收集已结束")
-        print(f"[INFO] 数据保存在: {self.output_dir}/")
+        print("\n[INFO] Data collection completed")
+        print(f"[INFO] Data saved to: {self.output_dir}/")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='姿态数据收集工具')
+    parser = argparse.ArgumentParser(description='Pose Data Collection Tool')
     parser.add_argument('--countdown', type=int, default=5,
-                       help='按键后倒计时秒数 (默认: 5)')
+                       help='Countdown seconds after key press (default: 5)')
     parser.add_argument('--min-duration', type=int, default=30,
-                       help='建议最小录制时长/秒 (默认: 30)')
+                       help='Recommended minimum recording duration in seconds (default: 30)')
 
     args = parser.parse_args()
 
