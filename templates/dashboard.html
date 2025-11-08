@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>久坐提醒系统 - 数据仪表盘</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 标题栏 -->
+        <header class="header">
+            <h1>🪑 久坐提醒系统 - 数据仪表盘</h1>
+            <p class="subtitle">实时监测您的活动数据，保持健康生活方式</p>
+        </header>
+
+        <!-- 久坐警告 -->
+        <div id="prolongedSittingAlert" class="alert alert-danger" style="display: none;">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+                <h3>久坐警告</h3>
+                <p id="prolongedSittingMessage">您已持续坐姿超过30分钟，建议起身活动！</p>
+            </div>
+        </div>
+
+        <!-- 当前会话卡片 -->
+        <div class="card current-session">
+            <h2>📍 当前状态</h2>
+            <div id="currentSessionContent">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 今日统计卡片 -->
+        <div class="stats-grid">
+            <div class="card stat-card">
+                <div class="stat-icon">🪑</div>
+                <div class="stat-content">
+                    <h3>坐姿时长</h3>
+                    <p class="stat-value" id="todaySitting">-</p>
+                    <p class="stat-label">今日累计</p>
+                </div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon">🧍</div>
+                <div class="stat-content">
+                    <h3>站立时长</h3>
+                    <p class="stat-value" id="todayStanding">-</p>
+                    <p class="stat-label">今日累计</p>
+                </div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon">🛏️</div>
+                <div class="stat-content">
+                    <h3>躺卧时长</h3>
+                    <p class="stat-value" id="todayLying">-</p>
+                    <p class="stat-label">今日累计</p>
+                </div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-content">
+                    <h3>会话次数</h3>
+                    <p class="stat-value" id="todaySessions">-</p>
+                    <p class="stat-label">今日总计</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 坐姿详细统计 -->
+        <div class="card sitting-details">
+            <h2>💺 坐姿详细统计</h2>
+            <div id="sittingDetailsContent">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="charts-grid">
+            <!-- 今日活动分布饼图 -->
+            <div class="card chart-card">
+                <h2>📊 今日活动分布</h2>
+                <canvas id="todayPieChart"></canvas>
+            </div>
+
+            <!-- 本周趋势折线图 -->
+            <div class="card chart-card">
+                <h2>📈 本周活动趋势</h2>
+                <canvas id="weeklyTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 预测区域 -->
+        <div class="card prediction-card">
+            <h2>🔮 智能预测</h2>
+            <div id="predictionContent" class="prediction-content">
+                <div class="loading">加载预测数据...</div>
+            </div>
+        </div>
+
+        <!-- 异常检测区域 -->
+        <div class="card anomaly-card">
+            <h2>🔍 今日异常检测</h2>
+            <div id="anomalyContent">
+                <div class="loading">分析中...</div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>数据更新时间: <span id="lastUpdate">-</span></p>
+            <p>自动刷新: <span id="refreshCountdown">30</span> 秒</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

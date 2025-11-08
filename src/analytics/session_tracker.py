@@ -248,12 +248,16 @@ class SessionTracker:
         today = datetime.now()
         week_start = today - timedelta(days=today.weekday())  # 本周一
         week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_end = week_start + timedelta(days=6)  # 本周日
+        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
         stats = {
             'week_start': week_start.strftime('%Y-%m-%d'),
+            'week_end': week_end.strftime('%Y-%m-%d'),
             'total_sitting': 0.0,
             'total_standing': 0.0,
             'total_lying': 0.0,
+            'total_sessions': 0,
             'daily_breakdown': []
         }
 
@@ -276,7 +280,8 @@ class SessionTracker:
                 'date': day_str,
                 'sitting': 0.0,
                 'standing': 0.0,
-                'lying': 0.0
+                'lying': 0.0,
+                'sessions': 0
             }
 
             for record in history:
@@ -285,10 +290,12 @@ class SessionTracker:
 
                 if state in day_stats:
                     day_stats[state] += duration
+                day_stats['sessions'] += 1
 
             stats['total_sitting'] += day_stats['sitting']
             stats['total_standing'] += day_stats['standing']
             stats['total_lying'] += day_stats['lying']
+            stats['total_sessions'] += day_stats['sessions']
             stats['daily_breakdown'].append(day_stats)
 
         return stats

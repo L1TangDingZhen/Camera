@@ -87,16 +87,23 @@ def main():
 
     # 5. 本周统计
     print(f"\n【本周统计】")
-    weekly = tracker.get_weekly_statistics()
-    print(f"  周期: {weekly['week_start']} 到 {weekly['week_end']}")
-    print(f"  总会话数: {weekly['total_sessions']}")
-    print()
-    print(f"  每日坐姿时长:")
+    try:
+        weekly = tracker.get_weekly_statistics()
+        print(f"  周期: {weekly.get('week_start', 'N/A')} 到 {weekly.get('week_end', 'N/A')}")
+        print(f"  总会话数: {weekly.get('total_sessions', 0)}")
+        print()
+        print(f"  每日坐姿时长:")
 
-    for day_stat in weekly['daily_breakdown']:
-        sitting_hours = day_stat['sitting_duration'] / 3600
-        if sitting_hours > 0:
-            print(f"    {day_stat['date']}: {sitting_hours:.1f}h ({day_stat['sessions']} 次会话)")
+        for day_stat in weekly.get('daily_breakdown', []):
+            sitting_duration = day_stat.get('sitting', 0)
+            sitting_hours = sitting_duration / 3600
+            if sitting_hours > 0:
+                print(f"    {day_stat.get('date', 'N/A')}: {sitting_hours:.1f}h ({day_stat.get('sessions', 0)} 次会话)")
+
+        if not weekly.get('daily_breakdown'):
+            print("    暂无本周数据")
+    except Exception as e:
+        print(f"  获取本周统计失败: {e}")
 
     print("\n" + "=" * 60)
     print("💡 提示: 运行 'python main.py --config config/config_gpu.yaml' 开始记录")
