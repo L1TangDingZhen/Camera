@@ -211,8 +211,8 @@ class PoseClassifierTrainer:
         meta_path = output_path.replace('.pkl', '_meta.json')
         metadata = {
             'label_mapping': self.label_mapping,
-            'feature_dim': self.scaler.n_features_in_,
-            'n_samples_trained': self.clf.n_support_.sum(),
+            'feature_dim': int(self.scaler.n_features_in_),  # 转换为Python int
+            'n_samples_trained': int(self.clf.n_support_.sum()),  # 转换为Python int
         }
 
         with open(meta_path, 'w') as f:
