@@ -30,12 +30,9 @@ class PoseClassifierTrainer:
         self.data_dir = data_dir
         self.scaler = StandardScaler()
         self.clf = None
-        self.label_mapping = {
-            'sitting': 0,
-            'standing': 1,
-            'lying': 2
-        }
-        self.reverse_mapping = {v: k for k, v in self.label_mapping.items()}
+        # 标签映射会在 load_data 中动态创建
+        self.label_mapping = {}
+        self.reverse_mapping = {}
 
     def load_data(self) -> Tuple[np.ndarray, np.ndarray]:
         """加载训练数据
@@ -47,12 +44,18 @@ class PoseClassifierTrainer:
         all_features = []
         all_labels = []
 
+        # 动态创建标签映射（只包含实际存在的类别）
+        label_idx = 0
         for pose_label in ['sitting', 'standing', 'lying']:
             filepath = os.path.join(self.data_dir, f"{pose_label}_samples.json")
 
             if not os.path.exists(filepath):
                 print(f"[WARN] 未找到 {pose_label} 的数据文件: {filepath}")
                 continue
+
+            # 为这个类别创建映射
+            self.label_mapping[pose_label] = label_idx
+            label_idx += 1
 
             with open(filepath, 'r') as f:
                 samples = json.load(f)
@@ -62,6 +65,9 @@ class PoseClassifierTrainer:
             for sample in samples:
                 all_features.append(sample['features'])
                 all_labels.append(self.label_mapping[pose_label])
+
+        # 创建反向映射
+        self.reverse_mapping = {v: k for k, v in self.label_mapping.items()}
 
         if len(all_features) == 0:
             raise ValueError("没有找到任何训练数据！请先运行 collect_data.py 收集数据。")
