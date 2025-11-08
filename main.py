@@ -109,8 +109,10 @@ class LifeTracker:
         # 创建可调整大小的窗口
         if self.show_visualization:
             cv2.namedWindow('Life Tracker', cv2.WINDOW_NORMAL)
-            # 设置默认窗口大小（可以根据需要调整）
-            cv2.resizeWindow('Life Tracker', 1280, 720)
+            # 设置默认窗口大小为摄像头分辨率（Full HD）
+            cam_width = self.config['camera']['resolution'][0]
+            cam_height = self.config['camera']['resolution'][1]
+            cv2.resizeWindow('Life Tracker', cam_width, cam_height)
 
         try:
             while self.running:
@@ -285,13 +287,15 @@ class LifeTracker:
         cv2.rectangle(overlay, (10, 10), (350, info_height), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
-        # 文本信息
-        y_offset = 30
-        line_height = 25
+        # 文本信息（针对Full HD分辨率优化）
+        y_offset = 40
+        line_height = 35
+        font_scale = 1.0  # 增大字体（原0.6）
+        font_thickness = 3  # 增加粗细（原2）
 
         # FPS
         cv2.putText(frame, f"FPS: {fps:.1f}", (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), font_thickness)
         y_offset += line_height
 
         # 当前状态
@@ -305,22 +309,26 @@ class LifeTracker:
         }.get(state.value, (255, 255, 255))
 
         cv2.putText(frame, f"State: {state.value}", (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, state_color, 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale, state_color, font_thickness)
         y_offset += line_height
 
         # 当前区域
         zone = self.state_machine.current_zone or "None"
         cv2.putText(frame, f"Zone: {zone}", (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
         y_offset += line_height
 
         # 状态持续时间
         duration = self.state_machine.get_state_duration(time.time())
         cv2.putText(frame, f"Duration: {duration:.1f}s", (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
         y_offset += line_height
 
-        # 调试信息
+        # 调试信息（针对Full HD优化）
+        debug_font_scale = 0.7  # 增大调试文字（原0.4-0.5）
+        debug_thickness = 2     # 增加粗细（原1）
+        debug_line_height = 30  # 增大行距（原18-20）
+
         if debug_mode and hasattr(self, '_last_keypoints') and self._last_keypoints is not None:
             from src.detectors.base import Keypoint, PoseUtils
             kp = self._last_keypoints
@@ -330,8 +338,8 @@ class LifeTracker:
                 # 身体角度
                 body_angle = PoseUtils.get_body_orientation(kp)
                 cv2.putText(frame, f"Body Angle: {body_angle:.1f}deg", (20, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                y_offset += 20
+                           cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
+                y_offset += debug_line_height
 
                 # 膝盖角度
                 if kp[Keypoint.LEFT_HIP, 2] > 0.3 and kp[Keypoint.LEFT_KNEE, 2] > 0.3 and kp[Keypoint.LEFT_ANKLE, 2] > 0.3:
@@ -341,27 +349,27 @@ class LifeTracker:
                         kp[Keypoint.LEFT_ANKLE, :2]
                     )
                     cv2.putText(frame, f"Knee Angle: {knee_angle:.1f}deg", (20, y_offset),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                    y_offset += 20
+                               cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
+                    y_offset += debug_line_height
 
                 # 身体高度
                 body_height = PoseUtils.get_body_height(kp)
                 cv2.putText(frame, f"Height: {body_height:.0f}px", (20, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                y_offset += 20
+                           cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
+                y_offset += debug_line_height
 
                 # 诊断信息（显示判断依据）
                 diagnosis = self.state_machine.get_diagnosis()
                 if diagnosis:
-                    y_offset += 10  # 空一行
+                    y_offset += 15  # 空一行
                     cv2.putText(frame, "=== Diagnosis ===", (20, y_offset),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
-                    y_offset += 20
+                               cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (255, 200, 0), debug_thickness)
+                    y_offset += debug_line_height
 
                     mode = diagnosis.get('mode', 'N/A')
                     cv2.putText(frame, f"Mode: {mode}", (20, y_offset),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                    y_offset += 18
+                               cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (255, 255, 255), debug_thickness)
+                    y_offset += debug_line_height
 
                     # 根据模式显示不同的诊断信息
                     if mode == '3d':
@@ -370,15 +378,15 @@ class LifeTracker:
                             torso_angle = diagnosis['torso_angle']
                             color = (0, 255, 255)  # 黄色
                             cv2.putText(frame, f"TorsoAngle: {torso_angle:.1f}deg (0=upright, 90=horizontal)",
-                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-                            y_offset += 18
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, color, debug_thickness)
+                            y_offset += debug_line_height
 
                         if 'hip_knee_z_diff' in diagnosis:
                             z_diff = diagnosis['hip_knee_z_diff']
                             color = (0, 255, 255)
                             cv2.putText(frame, f"Hip-Knee Z: {z_diff:.1f}cm (>0=sitting, ~0=standing)",
-                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-                            y_offset += 18
+                                       (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, color, debug_thickness)
+                            y_offset += debug_line_height
 
                         if 'hip_knee_dist' in diagnosis:
                             dist = diagnosis['hip_knee_dist']

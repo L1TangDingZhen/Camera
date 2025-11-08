@@ -28,7 +28,7 @@ models:
 camera:
   source: 0  # 0=默认摄像头, 或视频文件路径
   fps: 30  # GPU模式支持高帧率
-  resolution: [640, 480]  # 改回标准分辨率（720p太慢，读帧24ms）
+  resolution: [1920, 1080]  # Full HD - RTX 4070可以处理
   flip: false
   rotation: 0
 
