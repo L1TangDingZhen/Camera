@@ -88,9 +88,13 @@ class ModelTester:
                 bbox = self.person_detector.detect(frame)
 
                 if bbox is not None:
-                    keypoints, world_landmarks = self.pose_estimator.estimate(frame, bbox)
+                    keypoints = self.pose_estimator.estimate(frame, bbox)
 
-                    if world_landmarks is not None:
+                    if keypoints is not None:
+                        world_landmarks = self.pose_estimator.get_world_landmarks()
+
+                        if world_landmarks is None:
+                            continue
                         # DL预测
                         dl_probs = dl_model.predict_proba(world_landmarks)
                         dl_pred = max(dl_probs, key=dl_probs.get) if dl_probs else None

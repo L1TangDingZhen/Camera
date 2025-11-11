@@ -116,9 +116,14 @@ class DataCollector:
 
                 if bbox is not None:
                     # 姿态估计
-                    keypoints, world_landmarks = self.pose_estimator.estimate(frame, bbox)
+                    keypoints = self.pose_estimator.estimate(frame, bbox)
 
-                    if world_landmarks is not None:
+                    if keypoints is not None:
+                        world_landmarks = self.pose_estimator.get_world_landmarks()
+
+                        if world_landmarks is None:
+                            continue
+
                         # 获取标签
                         if self.auto_label:
                             # 自动标注
