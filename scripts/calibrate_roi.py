@@ -22,7 +22,7 @@ class ROICalibrator:
         self.config_path = config_path
 
         # 加载配置
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
         # 摄像头

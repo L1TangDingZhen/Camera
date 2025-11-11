@@ -33,7 +33,7 @@ class DataCollector:
 
     def __init__(self, config_path='config/config_cpu.yaml', auto_label=False):
         # 加载配置
-        with open(config_path) as f:
+        with open(config_path, encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
         # 初始化检测器
