@@ -104,12 +104,15 @@ class BehaviorStateMachine:
         # 诊断信息（用于调试）
         self.last_diagnosis: Dict = {}
 
-        # SVM分类器（可选）
-        self.svm_classifier = None
+        # === 分类器选择（SVM / DL / Ensemble）===
+        self.classifier = None
         self.last_probabilities: Optional[Dict[str, float]] = None
-        if SVM_AVAILABLE:
-            model_path = config.get('behavior', {}).get('svm_model_path', 'models/pose_classifier_svm.pkl')
-            self.svm_classifier = PoseClassifierSVM(model_path)
+        self._init_classifier(config)
+
+        # === 决策策略选择（Simple / RL）===
+        self.rl_decision_agent = None
+        self.use_rl_decision = False
+        self._init_decision_strategy(config)
 
         # SessionTracker（时长统计）
         self.session_tracker = None
@@ -118,6 +121,88 @@ class BehaviorStateMachine:
             print(f"[BehaviorStateMachine] SessionTracker已启用")
 
         print(f"[BehaviorStateMachine] 初始化完成")
+
+    def _init_classifier(self, config: dict):
+        """初始化分类器（SVM / DL / Ensemble）"""
+        classifier_config = config.get('behavior', {}).get('classifier', {})
+        classifier_type = classifier_config.get('type', 'svm')
+
+        if classifier_type == 'svm':
+            # 使用SVM（原有）
+            if SVM_AVAILABLE:
+                model_path = classifier_config.get('model_path', 'models/pose_classifier_svm.pkl')
+                self.classifier = PoseClassifierSVM(model_path)
+                print(f"[BehaviorStateMachine] 使用SVM分类器")
+
+        elif classifier_type == 'deep_learning':
+            # 使用DL分类器
+            try:
+                from ..classifiers.pose_classifier_dl import PoseClassifierDL
+                model_type = classifier_config.get('model_type', 'lstm')
+                model_path = classifier_config.get('model_path', f'models/pose_classifier_{model_type}.pth')
+                device = classifier_config.get('device', 'cuda')
+                self.classifier = PoseClassifierDL(model_path, model_type, device)
+                print(f"[BehaviorStateMachine] 使用DL分类器: {model_type}")
+            except Exception as e:
+                print(f"[ERROR] 加载DL分类器失败: {e}")
+                print(f"[INFO] 降级到基于规则的分类")
+
+        elif classifier_type == 'rl_ensemble':
+            # 使用RL Ensemble分类器
+            try:
+                from ..classifiers.pose_classifier_ensemble import RLEnsembleClassifier
+
+                # 加载多个基础分类器
+                base_classifiers = []
+                for model_cfg in classifier_config.get('ensemble_models', []):
+                    if model_cfg['type'] == 'svm' and SVM_AVAILABLE:
+                        clf = PoseClassifierSVM(model_cfg['path'])
+                        base_classifiers.append(clf)
+                    elif model_cfg['type'] == 'deep_learning':
+                        from ..classifiers.pose_classifier_dl import PoseClassifierDL
+                        clf = PoseClassifierDL(
+                            model_path=model_cfg['path'],
+                            model_type=model_cfg.get('model_type', 'lstm'),
+                            device=classifier_config.get('device', 'cuda')
+                        )
+                        base_classifiers.append(clf)
+
+                if len(base_classifiers) >= 2:
+                    agent_path = classifier_config.get('agent_path')
+                    self.classifier = RLEnsembleClassifier(base_classifiers, agent_path=agent_path)
+                    print(f"[BehaviorStateMachine] 使用RL Ensemble分类器 ({len(base_classifiers)}个模型)")
+                else:
+                    print(f"[ERROR] Ensemble需要至少2个分类器，实际只有{len(base_classifiers)}个")
+                    print(f"[INFO] 降级到基于规则的分类")
+            except Exception as e:
+                print(f"[ERROR] 加载Ensemble分类器失败: {e}")
+                print(f"[INFO] 降级到基于规则的分类")
+
+        else:
+            print(f"[WARN] 未知的分类器类型: {classifier_type}")
+            print(f"[INFO] 使用基于规则的分类")
+
+    def _init_decision_strategy(self, config: dict):
+        """初始化决策策略（Simple / RL）"""
+        decision_config = config.get('behavior', {}).get('decision', {})
+        decision_type = decision_config.get('type', 'simple')
+
+        if decision_type == 'rl':
+            # 使用RL决策
+            try:
+                from .rl_state_decision import RLDecisionAgent
+                agent_path = decision_config.get('agent_path')
+                self.rl_decision_agent = RLDecisionAgent(agent_path=agent_path)
+                self.use_rl_decision = True
+                print(f"[BehaviorStateMachine] 使用RL决策策略")
+            except Exception as e:
+                print(f"[ERROR] 加载RL决策失败: {e}")
+                print(f"[INFO] 降级到简单防抖决策")
+                self.use_rl_decision = False
+        else:
+            # 使用简单防抖（原有）
+            self.use_rl_decision = False
+            print(f"[BehaviorStateMachine] 使用简单防抖决策")
 
     def update(self, bbox: Optional[np.ndarray], keypoints: Optional[np.ndarray],
                timestamp: float, world_landmarks: Optional[np.ndarray] = None) -> List[BehaviorEvent]:
@@ -238,21 +323,34 @@ class BehaviorStateMachine:
         """
         使用3D坐标判断姿态（核心逻辑）
 
-        优先级：
-        1. 如果有SVM模型，优先使用SVM分类（概率预测）
-        2. 否则降级到基于规则的分类：
-           - LYING - 躯干接近水平
-           - STANDING - 身体完全伸展
-           - SITTING - 排除法（不是躺也不是站）
+        流程：
+        1. 分类层：使用选定的分类器（SVM/DL/Ensemble）获取概率
+        2. 决策层：
+           - Simple：直接取最高概率
+           - RL：RL agent决定何时输出
+        3. 降级方案：基于规则的分类
         """
-        # 优先使用SVM分类器
-        if self.svm_classifier is not None and self.svm_classifier.is_loaded:
-            probs = self.svm_classifier.predict_proba(world_landmarks)
+        # === 分类层：使用选定的分类器 ===
+        if self.classifier is not None and hasattr(self.classifier, 'is_loaded') and self.classifier.is_loaded:
+            probs = self.classifier.predict_proba(world_landmarks)
             if probs is not None:
                 self.last_probabilities = probs  # 存储概率用于显示
 
-                # 根据最高概率确定状态
-                predicted_label = max(probs, key=probs.get)
+                # === 决策层：Simple 或 RL ===
+                if self.use_rl_decision and self.rl_decision_agent is not None:
+                    # RL决策：可能输出状态，也可能等待
+                    context = self._get_rl_context()
+                    predicted_label, action, metadata = self.rl_decision_agent.decide(
+                        probs, context, training=False
+                    )
+
+                    if predicted_label is None:
+                        # RL决定等待/验证/拒绝，保持当前状态
+                        return BehaviorState.UNKNOWN
+
+                else:
+                    # 简单决策：直接取最高概率
+                    predicted_label = max(probs, key=probs.get)
 
                 # 转换为BehaviorState枚举
                 state_mapping = {
@@ -263,7 +361,7 @@ class BehaviorStateMachine:
 
                 return state_mapping.get(predicted_label, BehaviorState.UNKNOWN)
 
-        # 降级方案：基于规则的分类
+        # === 降级方案：基于规则的分类 ===
         self.last_probabilities = None  # 清除概率
 
         # 判断躺姿（优先级最高）
@@ -277,6 +375,21 @@ class BehaviorStateMachine:
         # 排除法：不是躺也不是站 → 就是坐
         # 这包容了所有坐姿变化：正坐、前倾、靠背、侧身等
         return BehaviorState.SITTING
+
+    def _get_rl_context(self) -> Dict:
+        """获取RL决策所需的上下文信息"""
+        from datetime import datetime
+        import time
+
+        context = {
+            'motion': 0.0,  # TODO: 从运动缓冲计算
+            'hour_of_day': datetime.now().hour,
+            'is_working_hours': 9 <= datetime.now().hour <= 18,
+            'keypoint_visibility': 1.0,  # TODO: 从landmarks计算
+            'time_since_last_change': time.time() - self.state_start_time,
+            'current_duration': time.time() - self.state_start_time
+        }
+        return context
 
     def _classify_2d(self, keypoints: np.ndarray) -> BehaviorState:
         """使用2D坐标判断姿态（降级方案）"""
