@@ -1,86 +1,59 @@
-# Life Tracker - Jetson Orin Nano Docker Image
-# Base: NVIDIA JetPack 5.x with PyTorch and CUDA support
-# Stage: v1.0-mediapipe (MediaPipe baseline)
-
-# Use NVIDIA L4T (Linux for Tegra) base image with JetPack 5.1.2
 FROM nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
 
-# Metadata
 LABEL maintainer="Life Tracker Team"
 LABEL version="1.0.1-jetson-mediapipe"
-LABEL description="Life Tracker - Daily Activity Analysis System for Jetson Orin Nano"
 
-# Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-ENV PYTHON_VERSION=3.8
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies in smaller steps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Build tools
     build-essential \
     cmake \
     git \
     wget \
     curl \
-    # OpenCV dependencies
+    && rm -rf /var/lib/apt/lists/*
+
+# Install OpenCV dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-dev \
     python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install other dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenblas-dev \
     libjpeg-dev \
     zlib1g-dev \
-    libpng-dev \
-    libtiff-dev \
-    # Additional libraries
-    libhdf5-serial-dev \
-    hdf5-tools \
-    libhdf5-dev \
-    # Utilities
     nano \
     htop \
-    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip
 RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# Copy requirements file
+# Copy and install Python requirements
 COPY requirements_jetson.txt /app/
-
-# Install Python dependencies
-# NOTE: torch and torchvision are already in the base image
 RUN pip3 install --no-cache-dir -r requirements_jetson.txt
 
-# Copy project files
+# Copy application code
 COPY . /app/
 
-# Create necessary directories
-RUN mkdir -p /app/data \
-    /app/logs \
-    /app/models \
-    /app/config
+# Create directories
+RUN mkdir -p /app/data /app/logs /app/models /app/config
 
-# Download YOLOv8 models (optional, can be mounted as volume)
+# Download YOLO models
 RUN cd /app/models && \
-    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt && \
-    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt && \
-    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt && \
-    cd /app
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt || true && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt || true && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt || true
 
 # Set permissions
 RUN chmod +x /app/*.sh 2>/dev/null || true
 
-# Expose ports
-EXPOSE 5000  
+EXPOSE 5000
 
-# Web dashboard
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:5000/api/health', timeout=5)" || exit 1
-
-# Default command (can be overridden in docker-compose)
 CMD ["python3", "main.py", "--config", "config/config_jetson_balanced.yaml"]
