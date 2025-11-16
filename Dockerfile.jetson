@@ -74,7 +74,9 @@ RUN cd /app/models && \
 RUN chmod +x /app/*.sh 2>/dev/null || true
 
 # Expose ports
-EXPOSE 5000  # Web dashboard
+EXPOSE 5000  
+
+# Web dashboard
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
