@@ -78,3 +78,17 @@ docs/_build/
 *.png
 !docs/*.png
 !docs/*.jpg
+# Training data and models (local only, not in git)
+data/*.npz
+data/my_training.npz
+training_data/
+models/*.pkl
+models/*.json
+*.pt
+models/*.pt
+camera/
+FETCH_HEAD
+
+# Git tags (should not be in working directory)
+v*.*.*
+
