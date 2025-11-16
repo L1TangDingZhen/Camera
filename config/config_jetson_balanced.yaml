@@ -1,0 +1,116 @@
+# Life Tracker - Jetson Balanced配置
+# 适用于：日常使用、24/7监控、性价比最优
+# 预期性能：30-35 FPS @ 15W
+# ⭐ 推荐默认配置 - 性能与精度的最佳平衡
+
+name: "Jetson Orin Nano - Balanced Mode"
+device: cuda:0
+
+hardware:
+  name: "NVIDIA Jetson Orin Nano Super"
+  power_mode: "15W"  # Recommended power mode
+  note: "Optimal balance for 24/7 daily activity analysis"
+
+models:
+  person:
+    model: yolov8s.pt  # Small model - best cost/performance ratio
+    device: cuda:0
+    confidence: 0.5
+    iou: 0.45
+
+  pose:
+    backend: mediapipe  # Stage 1: MediaPipe (current)
+    complexity: 1  # Full mode for better accuracy
+    device: cpu  # MediaPipe doesn't support GPU
+    confidence: 0.3
+    # Stage 2: Upgrade to RTMPose for GPU acceleration
+    # backend: rtmpose
+    # model: rtmpose-s  # Small model, 12ms inference
+    # device: cuda:0
+
+camera:
+  source: 0  # 0=default camera, or RTSP URL
+  fps: 30
+  resolution: [1280, 720]  # 720p - sufficient for daily analysis
+  flip: false
+  rotation: 0
+
+inference:
+  skip_frames: 0
+  detection_interval: 1  # No frame skipping - process every frame
+  max_buffer_size: 150
+
+roi:
+  zones:
+    bed:
+      enabled: true
+      points: []  # Use calibrate_roi.py to set
+    door:
+      enabled: true
+      points: []
+    chair:
+      enabled: true
+      points: []
+    bathroom:
+      enabled: false
+      points: []
+
+behavior:
+  classifier:
+    type: svm  # SVM classifier (train with train_svm.py)
+    model_path: models/pose_classifier_svm.pkl
+    # Alternative options:
+    # type: deep_learning  # Use DL classifier (LSTM/Transformer)
+    # type: rl_ensemble    # Use RL ensemble classifier
+
+  # Sitting posture thresholds
+  sitting:
+    hip_height_min: 0.3  # Relative to body height
+    hip_height_max: 0.6
+    knee_angle_max: 120  # degrees
+
+  # Lying posture thresholds
+  lying:
+    body_angle_max: 30  # Angle with horizontal plane
+    shoulder_hip_ratio: 0.15  # Shoulder-hip height difference
+
+  # Sleeping detection
+  sleeping:
+    still_duration: 300  # seconds, consider sleeping if still
+    motion_threshold: 0.02  # Motion threshold
+
+  # Event detection
+  events:
+    enter_duration: 2  # seconds
+    leave_duration: 2
+    night_start: "22:00"
+    night_end: "06:00"
+
+storage:
+  database: "data/database.db"
+  backup_interval: 86400  # seconds, daily backup
+  retention_days: 90  # Data retention period
+
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/app.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  performance_metrics: true
+
+debug:
+  show_keypoints: false
+  show_skeleton: false
+  show_angles: false
+  show_state_info: true
+
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+
+# TensorRT optimization (Jetson only)
+tensorrt:
+  enabled: true  # Must enable on Jetson for acceleration
+  fp16_mode: true
+  workspace_size: 2048  # MB (Jetson has limited memory)
