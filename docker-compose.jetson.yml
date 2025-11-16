@@ -1,0 +1,153 @@
+# Life Tracker - Docker Compose for Jetson Orin Nano
+# Supports 3 modes: lite, balanced, performance
+# Usage:
+#   docker-compose -f docker-compose.jetson.yml --profile balanced up
+#   docker-compose -f docker-compose.jetson.yml --profile lite up
+#   docker-compose -f docker-compose.jetson.yml --profile performance up
+
+version: '3.8'
+
+services:
+  # Balanced Mode (Default, Recommended)
+  life-tracker-balanced:
+    image: life-tracker:jetson-mediapipe-balanced
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    container_name: life-tracker-balanced
+    profiles: ["balanced"]
+    runtime: nvidia  # NVIDIA Container Runtime
+    restart: unless-stopped
+
+    # Device access
+    devices:
+      - /dev/video0:/dev/video0  # Camera
+      # Add more cameras if needed
+      # - /dev/video1:/dev/video1
+
+    # Volumes for data persistence
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+
+    # Network
+    ports:
+      - "5000:5000"  # Web dashboard
+
+    # Environment variables
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - CONFIG_FILE=config/config_jetson_balanced.yaml
+
+    # Command
+    command: python3 main.py --config config/config_jetson_balanced.yaml
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Lite Mode (Power Saving)
+  life-tracker-lite:
+    image: life-tracker:jetson-mediapipe-lite
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    container_name: life-tracker-lite
+    profiles: ["lite"]
+    runtime: nvidia
+    restart: unless-stopped
+
+    devices:
+      - /dev/video0:/dev/video0
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - CONFIG_FILE=config/config_jetson_lite.yaml
+
+    command: python3 main.py --config config/config_jetson_lite.yaml
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Performance Mode (High Accuracy)
+  life-tracker-performance:
+    image: life-tracker:jetson-mediapipe-performance
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    container_name: life-tracker-performance
+    profiles: ["performance"]
+    runtime: nvidia
+    restart: unless-stopped
+
+    devices:
+      - /dev/video0:/dev/video0
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - CONFIG_FILE=config/config_jetson_performance.yaml
+
+    command: python3 main.py --config config/config_jetson_performance.yaml
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Web Dashboard (Separate Service, Optional)
+  dashboard:
+    image: life-tracker:jetson-mediapipe-balanced
+    container_name: life-tracker-dashboard
+    profiles: ["dashboard"]
+    restart: unless-stopped
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    ports:
+      - "5000:5000"
+
+    command: python3 web_dashboard.py
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+# Volumes (optional, for named volumes)
+volumes:
+  data:
+  logs:
+  models:
