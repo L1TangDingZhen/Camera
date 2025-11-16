@@ -1,49 +1,49 @@
-# Windows部署指南
+# Windows Deployment Guide
 
-## 🪟 Windows特殊说明
+## 🪟 Windows Special Instructions
 
-Windows上部署Life Tracker有一些特殊注意事项。
+Deploying Life Tracker on Windows has some special considerations.
 
 ---
 
-## ✅ 推荐方案：虚拟环境（不用Docker）
+## ✅ Recommended Option: Virtual Environment (No Docker)
 
-### 1. 安装Python
+### 1. Install Python
 
 ```powershell
-# 下载并安装 Python 3.10+
+# Download and install Python 3.10+
 # https://www.python.org/downloads/
 
-# 验证安装
+# Verify installation
 python --version
 ```
 
-### 2. 克隆代码
+### 2. Clone Code
 
 ```powershell
 git clone https://github.com/L1TangDingZhen/Camera.git
 cd Camera
 ```
 
-### 3. 创建虚拟环境
+### 3. Create Virtual Environment
 
 ```powershell
-# 创建虚拟环境
+# Create virtual environment
 python -m venv venv
 
-# 激活虚拟环境
+# Activate virtual environment
 venv\Scripts\activate
 
-# 看到 (venv) 前缀表示成功
+# Seeing (venv) prefix indicates success
 ```
 
-### 4. 安装依赖
+### 4. Install Dependencies
 
 ```powershell
-# 升级pip
+# Upgrade pip
 python -m pip install --upgrade pip
 
-# 分步安装（推荐）
+# Step-by-step install (recommended)
 pip install numpy opencv-python pyyaml
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install ultralytics
@@ -51,33 +51,33 @@ pip install mediapipe
 pip install pandas scipy matplotlib psutil tqdm loguru
 pip install flask flask-cors
 
-# 或一键安装（可能较慢）
+# Or one-click install (may be slow)
 pip install -r requirements.txt
 ```
 
-### 5. 测试运行
+### 5. Test Run
 
 ```powershell
-# 不需要摄像头的测试
+# Test without camera
 python test_quick.py
 
-# 如果有摄像头
+# If camera is available
 python main.py --device pc
 ```
 
 ---
 
-## 🐳 使用Docker（高级用户）
+## 🐳 Using Docker (Advanced Users)
 
-### Windows上Docker的特殊配置
+### Special Docker Configuration on Windows
 
-#### 方法1: 使用headless版本（推荐）
+#### Method 1: Using headless Version (Recommended)
 
 ```powershell
-# 使用headless Dockerfile（无GUI，适合后台运行）
+# Use headless Dockerfile (no GUI, suitable for background running)
 docker build -f Dockerfile.headless -t life-tracker:headless .
 
-# 运行（无可视化）
+# Run (no visualization)
 docker run -d ^
   --name life-tracker ^
   -v %cd%\data:/app/data ^
@@ -87,37 +87,37 @@ docker run -d ^
   life-tracker:headless
 ```
 
-#### 方法2: 使用WSL2摄像头
+#### Method 2: Using WSL2 Camera
 
-如果你使用WSL2，可以访问摄像头：
+If you're using WSL2, you can access the camera:
 
 ```powershell
-# 在WSL2中运行
+# Run in WSL2
 wsl
 
-# 然后按照Linux方式部署
-cd /mnt/c/Users/你的用户名/Desktop/code/Camera
+# Then deploy as in Linux
+cd /mnt/c/Users/your_username/Desktop/code/Camera
 docker-compose up -d
 ```
 
-#### 方法3: 使用视频文件测试
+#### Method 3: Using Video File for Testing
 
-1. 准备测试视频
+1. Prepare test video
 ```powershell
-# 下载或放置视频文件到 data 目录
-# 例如: data\test_video.mp4
+# Download or place video file in data directory
+# Example: data\test_video.mp4
 ```
 
-2. 修改配置
+2. Modify configuration
 ```yaml
-# 编辑 config/config_pc.yaml
+# Edit config/config_pc.yaml
 camera:
-  source: "data/test_video.mp4"  # 使用视频文件
+  source: "data/test_video.mp4"  # Use video file
   fps: 30
   resolution: [640, 480]
 ```
 
-3. 构建并运行
+3. Build and run
 ```powershell
 docker build -t life-tracker .
 docker run -d ^
@@ -130,147 +130,147 @@ docker run -d ^
 
 ---
 
-## 📸 Windows摄像头支持
+## 📸 Windows Camera Support
 
-### 检查摄像头
+### Check Camera
 
 ```powershell
-# 安装依赖后测试
+# Test after installing dependencies
 python -c "import cv2; print(cv2.VideoCapture(0).isOpened())"
 
-# 如果输出 True，说明摄像头可用
+# If output is True, camera is available
 ```
 
-### 常见摄像头ID
+### Common Camera IDs
 
-Windows上摄像头ID可能是：
-- `0` - 默认摄像头
-- `1` - 第二个摄像头
-- `"video=USB Camera"` - 指定设备名
+Camera IDs on Windows may be:
+- `0` - Default camera
+- `1` - Second camera
+- `"video=USB Camera"` - Specify device name
 
-修改 `config/config_pc.yaml`：
+Modify `config/config_pc.yaml`:
 
 ```yaml
 camera:
-  source: 0  # 或 1, 2 等
+  source: 0  # Or 1, 2, etc.
 ```
 
 ---
 
-## 🔧 常见问题
+## 🔧 Common Issues
 
-### 1. torch安装失败
+### 1. torch Installation Failed
 
 ```powershell
-# 使用CPU版本
+# Use CPU version
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# 如果有NVIDIA GPU
+# If you have NVIDIA GPU
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 ```
 
-### 2. OpenCV无法打开窗口
+### 2. OpenCV Cannot Open Window
 
-在Docker中运行时，Windows不支持X11转发，需要：
+When running in Docker, Windows doesn't support X11 forwarding, solutions:
 
-**方案A**: 使用无可视化模式
+**Option A**: Use no-visualization mode
 ```powershell
 python main.py --device pc --no-vis
 ```
 
-**方案B**: 使用虚拟环境（不用Docker）
+**Option B**: Use virtual environment (no Docker)
 ```powershell
-# 在Windows本地运行
+# Run locally on Windows
 venv\Scripts\activate
 python main.py --device pc
 ```
 
-### 3. Docker build失败
+### 3. Docker Build Failed
 
-如果遇到包安装错误：
+If encountering package installation errors:
 
 ```powershell
-# 使用headless版本
+# Use headless version
 docker build -f Dockerfile.headless -t life-tracker .
 ```
 
-### 4. 权限问题
+### 4. Permission Issues
 
 ```powershell
-# 以管理员身份运行PowerShell
-# 或使用 Docker Desktop 的集成终端
+# Run PowerShell as administrator
+# Or use Docker Desktop's integrated terminal
 ```
 
-### 5. 路径问题
+### 5. Path Issues
 
-Windows使用反斜杠，Python中需要转义：
+Windows uses backslashes, needs escaping in Python:
 
 ```python
-# 错误
+# Wrong
 camera.source = "C:\videos\test.mp4"
 
-# 正确
+# Correct
 camera.source = "C:/videos/test.mp4"
-# 或
+# Or
 camera.source = r"C:\videos\test.mp4"
 ```
 
 ---
 
-## 🎯 快速开始（Windows推荐流程）
+## 🎯 Quick Start (Windows Recommended Process)
 
-### 选项1: 不使用Docker（最简单）
+### Option 1: Without Docker (Simplest)
 
 ```powershell
-# 1. 安装Python 3.10+
-# 2. 克隆代码
+# 1. Install Python 3.10+
+# 2. Clone code
 git clone https://github.com/L1TangDingZhen/Camera.git
 cd Camera
 
-# 3. 创建虚拟环境
+# 3. Create virtual environment
 python -m venv venv
 venv\Scripts\activate
 
-# 4. 安装依赖
+# 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. 测试
+# 5. Test
 python test_quick.py
 
-# 6. 运行（如果有摄像头）
+# 6. Run (if camera available)
 python main.py --device pc
 ```
 
-### 选项2: 使用Docker（后台运行）
+### Option 2: Using Docker (Background Running)
 
 ```powershell
-# 1. 确保安装了 Docker Desktop
-# 2. 克隆代码
+# 1. Make sure Docker Desktop is installed
+# 2. Clone code
 git clone https://github.com/L1TangDingZhen/Camera.git
 cd Camera
 
-# 3. 准备测试视频（可选）
-# 放置视频到 data\test_video.mp4
+# 3. Prepare test video (optional)
+# Place video in data\test_video.mp4
 
-# 4. 修改配置使用视频
-# 编辑 config\config_pc.yaml
+# 4. Modify configuration to use video
+# Edit config\config_pc.yaml
 # camera.source: "data/test_video.mp4"
 
-# 5. 构建并运行
+# 5. Build and run
 docker build -f Dockerfile.headless -t life-tracker .
 docker run -d --name life-tracker -v %cd%\data:/app/data life-tracker
 
-# 6. 查看日志
+# 6. View logs
 docker logs -f life-tracker
 ```
 
 ---
 
-## 💡 性能优化
+## 💡 Performance Optimization
 
-### CPU优化
+### CPU Optimization
 
-Windows上如果没有NVIDIA GPU，强制使用CPU：
+If no NVIDIA GPU on Windows, force use of CPU:
 
 ```yaml
 # config/config_pc.yaml
@@ -280,23 +280,23 @@ models:
   person:
     device: cpu
   pose:
-    backend: mediapipe  # CPU友好
+    backend: mediapipe  # CPU-friendly
     device: cpu
 ```
 
-### 降低资源占用
+### Reduce Resource Usage
 
 ```yaml
 camera:
-  fps: 10  # 降低帧率
-  resolution: [320, 240]  # 降低分辨率
+  fps: 10  # Lower frame rate
+  resolution: [320, 240]  # Lower resolution
 ```
 
 ---
 
-## 📊 期望性能（Windows）
+## 📊 Expected Performance (Windows)
 
-| 配置 | FPS | 说明 |
+| Configuration | FPS | Notes |
 |------|-----|------|
 | i5-12 + CPU | 5-8 | YOLOv8s + MediaPipe |
 | i7-12 + CPU | 8-12 | YOLOv8s + MediaPipe |
@@ -304,54 +304,54 @@ camera:
 
 ---
 
-## 🆘 获取帮助
+## 🆘 Get Help
 
-如果遇到问题：
+If encountering issues:
 
-1. 查看 `logs\app.log` 日志
-2. 运行 `python test_quick.py` 诊断
-3. 查看 `DEPLOY.md` 通用部署指南
-4. 提交GitHub Issue
+1. Check `logs\app.log` log
+2. Run `python test_quick.py` for diagnostics
+3. Check `DEPLOY.md` general deployment guide
+4. Submit GitHub Issue
 
 ---
 
-## ✅ 验证安装成功
+## ✅ Verify Successful Installation
 
-运行测试脚本应该看到：
+Running test script should show:
 
 ```
 ============================================================
-  Life Tracker 组件测试
+  Life Tracker Component Test
 ============================================================
 
-[1/5] 测试配置加载...
-  ✓ 配置文件加载成功
+[1/5] Testing configuration loading...
+  ✓ Configuration file loaded successfully
 
-[2/5] 测试YOLOv8检测器...
-  ✓ 检测器正常
+[2/5] Testing YOLOv8 detector...
+  ✓ Detector normal
   ✓ FPS: 8.5
 
-[3/5] 测试MediaPipe姿态估计...
-  ✓ 姿态估计正常，关键点数: 17
+[3/5] Testing MediaPipe pose estimation...
+  ✓ Pose estimation normal, keypoints: 17
 
-[4/5] 测试ROI管理器...
-  ✓ ROI管理器初始化成功
+[4/5] Testing ROI manager...
+  ✓ ROI manager initialized successfully
 
-[5/5] 测试状态机...
-  ✓ 状态机初始化成功
+[5/5] Testing state machine...
+  ✓ State machine initialized successfully
 
-[6/6] 测试数据库...
-  ✓ 数据库初始化成功
+[6/6] Testing database...
+  ✓ Database initialized successfully
 
 ============================================================
-  ✓ 所有组件测试通过！
+  ✓ All component tests passed!
 ============================================================
 ```
 
 ---
 
-## 🎉 完成
+## 🎉 Complete
 
-现在你可以在Windows上运行Life Tracker了！
+Now you can run Life Tracker on Windows!
 
-推荐使用**虚拟环境方式**（不用Docker），更简单稳定。
+Recommend using **virtual environment method** (without Docker), simpler and more stable.

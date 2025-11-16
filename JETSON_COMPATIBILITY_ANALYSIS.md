@@ -1,208 +1,208 @@
-# 算力需求分析 - Jetson Orin Nano Super 适配性评估
+# Computational Requirements Analysis - Jetson Orin Nano Super Compatibility Assessment
 
-## 📊 当前系统算力需求
+## 📊 Current System Computational Requirements
 
-### 1. 模型组件分析
+### 1. Model Component Analysis
 
-| 组件 | 当前配置 | 算力消耗 | 推理时间（估算） |
+| Component | Current Configuration | Computational Cost | Inference Time (Estimated) |
 |------|---------|---------|------------------|
-| **人体检测** | YOLOv8m | ⭐⭐⭐⭐ 高 | ~15-25ms |
-| **姿态估计** | MediaPipe (CPU) | ⭐⭐⭐ 中 | ~35-50ms |
-| **姿态分类** | SVM | ⭐ 极低 | <1ms |
-| **状态机** | Python逻辑 | ⭐ 极低 | <1ms |
-| **SessionTracker** | 数据统计 | ⭐ 极低 | <1ms |
-| **行为预测** | 模式分析 | ⭐ 低 | ~2-5ms |
+| **Person Detection** | YOLOv8m | ⭐⭐⭐⭐ High | ~15-25ms |
+| **Pose Estimation** | MediaPipe (CPU) | ⭐⭐⭐ Medium | ~35-50ms |
+| **Pose Classification** | SVM | ⭐ Very Low | <1ms |
+| **State Machine** | Python Logic | ⭐ Very Low | <1ms |
+| **SessionTracker** | Data Statistics | ⭐ Very Low | <1ms |
+| **Behavior Prediction** | Pattern Analysis | ⭐ Low | ~2-5ms |
 
-**总推理时间（GPU模式）**: 约 **50-75ms/帧** = **13-20 FPS**
+**Total Inference Time (GPU mode)**: Approx **50-75ms/frame** = **13-20 FPS**
 
 ---
 
-## 🚀 NVIDIA Jetson Orin Nano Super 规格
+## 🚀 NVIDIA Jetson Orin Nano Super Specifications
 
-### 硬件参数
+### Hardware Parameters
 
 ```
-芯片: NVIDIA Jetson Orin Nano Super
+Chip: NVIDIA Jetson Orin Nano Super
 GPU: 1024-core NVIDIA Ampere architecture
-AI 性能: 67 TOPS (INT8)
+AI Performance: 67 TOPS (INT8)
 CPU: 6-core Arm Cortex-A78AE @ 2.0GHz
-内存: 8GB 128-bit LPDDR5 @ 102.4 GB/s
-存储: MicroSD (扩展到256GB+)
-功耗: 7W / 15W / 25W (三档可调)
-尺寸: 100mm x 79mm
-价格: ~$249 USD
+Memory: 8GB 128-bit LPDDR5 @ 102.4 GB/s
+Storage: MicroSD (expandable to 256GB+)
+Power: 7W / 15W / 25W (three adjustable modes)
+Dimensions: 100mm x 79mm
+Price: ~$249 USD
 ```
 
-### AI性能对比
+### AI Performance Comparison
 
-| 设备 | AI性能 (TOPS) | 功耗 | 价格 |
+| Device | AI Performance (TOPS) | Power | Price |
 |------|--------------|------|------|
 | **Jetson Orin Nano Super** | **67** | 7-25W | $249 |
 | Jetson Orin Nano | 40 | 7-15W | $199 |
 | Jetson Orin NX | 100 | 10-25W | $399 |
 | Jetson AGX Orin | 275 | 15-60W | $999+ |
-| RTX 4070 (桌面) | ~450+ | 200W | $599 |
+| RTX 4070 (Desktop) | ~450+ | 200W | $599 |
 
-**结论**: Jetson Orin Nano Super处于**中等算力**档位，适合边缘AI应用。
+**Conclusion**: Jetson Orin Nano Super is at **medium computational power** tier, suitable for edge AI applications.
 
 ---
 
-## ✅ 能否Hold住？详细分析
+## ✅ Can It Handle It? Detailed Analysis
 
-### 场景1: 当前配置（YOLOv8m + MediaPipe）
+### Scenario 1: Current Configuration (YOLOv8m + MediaPipe)
 
-#### 理论分析
+#### Theoretical Analysis
 
-**YOLOv8m 推理**:
-- 输入: 640x640 (标准输入)
-- 参数量: ~25.9M
+**YOLOv8m Inference**:
+- Input: 640x640 (standard input)
+- Parameters: ~25.9M
 - FLOPs: ~78.9 GFLOPs
 - Jetson Orin Nano Super (FP16): **~15-20ms**
 - Jetson Orin Nano Super (INT8 TensorRT): **~8-12ms** ✅
 
-**MediaPipe 姿态估计**:
-- 当前配置: CPU执行
-- CPU推理时间: ~35-50ms
-- **问题**: Jetson的CPU性能弱于桌面CPU！
+**MediaPipe Pose Estimation**:
+- Current configuration: CPU execution
+- CPU inference time: ~35-50ms
+- **Problem**: Jetson's CPU performance is weaker than desktop CPU!
 
-**总推理时间**:
+**Total Inference Time**:
 ```
-最坏情况（CPU MediaPipe）:
+Worst case (CPU MediaPipe):
   YOLOv8m (GPU, FP16): 20ms
   MediaPipe (CPU): 50ms
-  其他: 5ms
-  总计: 75ms = 13 FPS ⚠️
+  Other: 5ms
+  Total: 75ms = 13 FPS ⚠️
 
-优化后（TensorRT + GPU姿态）:
+Optimized (TensorRT + GPU Pose):
   YOLOv8s (TensorRT INT8): 8ms
   RTMPose-s (TensorRT FP16): 12ms
-  其他: 5ms
-  总计: 25ms = 40 FPS ✅
+  Other: 5ms
+  Total: 25ms = 40 FPS ✅
 ```
 
-#### 结论
-- ❌ **当前配置（YOLOv8m + MediaPipe CPU）**: 勉强13-15 FPS，不够流畅
-- ✅ **优化配置（YOLOv8s + RTMPose TensorRT）**: 30-40 FPS，完全够用！
+#### Conclusion
+- ❌ **Current configuration (YOLOv8m + MediaPipe CPU)**: Barely 13-15 FPS, not smooth enough
+- ✅ **Optimized configuration (YOLOv8s + RTMPose TensorRT)**: 30-40 FPS, fully sufficient!
 
 ---
 
-### 场景2: 优化配置（推荐）
+### Scenario 2: Optimized Configuration (Recommended)
 
-#### 优化方案
+#### Optimization Plan
 
-**方案A: 轻量级模型（推荐）**
+**Plan A: Lightweight Models (Recommended)**
 ```yaml
 models:
   person:
-    model: yolov8s.pt  # 轻量级：从yolov8m改为yolov8s
+    model: yolov8s.pt  # Lightweight: change from yolov8m to yolov8s
     device: cuda:0
 
   pose:
-    backend: rtmpose    # 从MediaPipe改为RTMPose
-    model: rtmpose-s    # 轻量级姿态估计
+    backend: rtmpose    # Change from MediaPipe to RTMPose
+    model: rtmpose-s    # Lightweight pose estimation
     device: cuda:0
 
 tensorrt:
-  enabled: true         # 启用TensorRT优化
-  fp16_mode: true       # FP16精度
+  enabled: true         # Enable TensorRT optimization
+  fp16_mode: true       # FP16 precision
 ```
 
-**预期性能**:
+**Expected Performance**:
 - YOLOv8s (TensorRT FP16): ~10ms
 - RTMPose-s (TensorRT FP16): ~12ms
-- 总计: **~25ms = 40 FPS** ✅
+- Total: **~25ms = 40 FPS** ✅
 
-**精度影响**:
-- YOLOv8m → YOLOv8s: mAP下降约2-3%（从70.8%到68.9%）
-- 对于久坐检测：**影响可忽略**（人体检测很简单）
+**Accuracy Impact**:
+- YOLOv8m → YOLOv8s: mAP drops approx 2-3% (from 70.8% to 68.9%)
+- For prolonged sitting detection: **Impact negligible** (person detection is simple)
 
 ---
 
-**方案B: 超轻量级（极致性能）**
+**Plan B: Ultra-Lightweight (Ultimate Performance)**
 ```yaml
 models:
   person:
-    model: yolov8n.pt  # 最轻量级：nano版本
+    model: yolov8n.pt  # Most lightweight: nano version
     device: cuda:0
 
   pose:
     backend: rtmpose
-    model: rtmpose-tiny  # 最轻量级姿态
+    model: rtmpose-tiny  # Most lightweight pose
     device: cuda:0
 
 camera:
-  resolution: [1280, 720]  # 降低分辨率
+  resolution: [1280, 720]  # Lower resolution
 
 tensorrt:
   enabled: true
   fp16_mode: true
-  int8_mode: true  # 启用INT8量化
+  int8_mode: true  # Enable INT8 quantization
 ```
 
-**预期性能**:
+**Expected Performance**:
 - YOLOv8n (TensorRT INT8): ~5ms
 - RTMPose-tiny (TensorRT FP16): ~8ms
-- 总计: **~15ms = 65+ FPS** 🚀
+- Total: **~15ms = 65+ FPS** 🚀
 
-**适用场景**: 电池供电、7W低功耗模式
-
----
-
-## 💾 内存需求分析
-
-### 当前系统内存占用
-
-```
-组件                      内存占用
-─────────────────────────────────
-YOLOv8m模型              ~50 MB
-MediaPipe模型            ~30 MB
-SVM模型                  <1 MB
-Python运行时             ~150 MB
-OpenCV + 视频缓冲        ~200 MB
-SessionTracker数据       ~10 MB
-行为预测缓存             ~5 MB
-Web Dashboard (Flask)    ~50 MB
-─────────────────────────────────
-总计                     ~495 MB
-峰值（含TensorRT引擎）   ~800 MB
-```
-
-**Jetson Orin Nano Super**: 8GB内存
-**结论**: ✅ **内存绰绰有余**（仅用10%）
+**Use Case**: Battery-powered, 7W low-power mode
 
 ---
 
-## ⚡ 功耗分析
+## 💾 Memory Requirements Analysis
 
-### 三档功耗模式
+### Current System Memory Usage
 
-| 模式 | 功耗 | 性能 | 适用场景 | 预估FPS |
+```
+Component                    Memory Usage
+─────────────────────────────────
+YOLOv8m model                ~50 MB
+MediaPipe model              ~30 MB
+SVM model                    <1 MB
+Python runtime               ~150 MB
+OpenCV + video buffer        ~200 MB
+SessionTracker data          ~10 MB
+Behavior prediction cache    ~5 MB
+Web Dashboard (Flask)        ~50 MB
+─────────────────────────────────
+Total                        ~495 MB
+Peak (with TensorRT engine)  ~800 MB
+```
+
+**Jetson Orin Nano Super**: 8GB memory
+**Conclusion**: ✅ **Memory is abundant** (only 10% used)
+
+---
+
+## ⚡ Power Analysis
+
+### Three Power Modes
+
+| Mode | Power | Performance | Use Case | Estimated FPS |
 |------|------|------|---------|---------|
-| **7W** | 7W | 50% GPU | 电池供电 | 20-25 FPS |
-| **15W** | 15W | 75% GPU | 标准模式 | 30-35 FPS |
-| **25W** | 25W | 100% GPU | 高性能 | 40-50 FPS |
+| **7W** | 7W | 50% GPU | Battery powered | 20-25 FPS |
+| **15W** | 15W | 75% GPU | Standard mode | 30-35 FPS |
+| **25W** | 25W | 100% GPU | High performance | 40-50 FPS |
 
-**推荐**: **15W模式** - 平衡性能和功耗，30+ FPS足够流畅
+**Recommendation**: **15W mode** - Balanced performance and power, 30+ FPS is smooth enough
 
 ---
 
-## 🔧 优化建议
+## 🔧 Optimization Recommendations
 
-### 1. 必须优化项
+### 1. Must Optimize
 
-**✅ 替换MediaPipe为RTMPose（GPU加速）**
+**✅ Replace MediaPipe with RTMPose (GPU Acceleration)**
 ```bash
-# 安装MMPose
+# Install MMPose
 pip install openmim
 mim install mmcv-full
 mim install mmpose
 
-# 下载RTMPose模型
+# Download RTMPose model
 mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/
 ```
 
-**配置文件**:
+**Configuration File**:
 ```yaml
 models:
   pose:
@@ -211,76 +211,76 @@ models:
     device: cuda:0
 ```
 
-**优化效果**:
+**Optimization Effect**:
 - MediaPipe (CPU): 50ms → RTMPose (GPU): 12ms
-- **提升4倍速度** 🚀
+- **4x speed increase** 🚀
 
 ---
 
-**✅ 启用TensorRT优化**
+**✅ Enable TensorRT Optimization**
 ```yaml
 tensorrt:
   enabled: true
   fp16_mode: true
-  workspace_size: 2048  # Jetson内存较小，设为2GB
+  workspace_size: 2048  # Jetson has less memory, set to 2GB
 ```
 
-**优化效果**:
+**Optimization Effect**:
 - YOLOv8m (PyTorch): 20ms → 12ms (TensorRT FP16)
 - YOLOv8s (PyTorch): 15ms → 8ms (TensorRT FP16)
-- **提升1.5-2倍速度** 🚀
+- **1.5-2x speed increase** 🚀
 
 ---
 
-### 2. 可选优化项
+### 2. Optional Optimizations
 
-**降低分辨率**:
+**Lower Resolution**:
 ```yaml
 camera:
-  resolution: [1280, 720]  # 从1080p降到720p
+  resolution: [1280, 720]  # From 1080p to 720p
 ```
-- 性能提升: ~30%
-- 精度影响: 微小（人体检测仍很准确）
+- Performance improvement: ~30%
+- Accuracy impact: Minimal (person detection still accurate)
 
-**降低帧率**:
+**Lower Frame Rate**:
 ```yaml
 camera:
-  fps: 15  # 从30降到15
+  fps: 15  # From 30 to 15
 ```
-- 功耗降低: ~40%
-- 对久坐检测影响: **无**（静态姿态不需要高帧率）
+- Power reduction: ~40%
+- Impact on prolonged sitting detection: **None** (static poses don't need high frame rate)
 
-**跳帧检测**:
+**Frame Skipping Detection**:
 ```yaml
 inference:
-  detection_interval: 2  # 每2帧检测一次
+  detection_interval: 2  # Detect once every 2 frames
 ```
-- 性能提升: ~50%
-- 适用场景: 7W模式
+- Performance improvement: ~50%
+- Use case: 7W mode
 
 ---
 
-## 📈 性能对比表
+## 📈 Performance Comparison Table
 
 ### PC (RTX 4070) vs Jetson Orin Nano Super
 
-| 配置 | RTX 4070 | Jetson (当前) | Jetson (优化后) |
+| Configuration | RTX 4070 | Jetson (Current) | Jetson (Optimized) |
 |------|----------|---------------|-----------------|
 | **YOLOv8m + MediaPipe** | 25 FPS | 13-15 FPS ⚠️ | - |
 | **YOLOv8s + RTMPose** | 60+ FPS | - | 35-40 FPS ✅ |
 | **YOLOv8n + RTMPose-tiny** | 120+ FPS | - | 60+ FPS 🚀 |
-| **功耗** | 200W | 15W | 15W |
-| **成本** | $599 | $249 | $249 |
+| **Power** | 200W | 15W | 15W |
+| **Cost** | $599 | $249 | $249 |
 
 ---
 
-## ✅ 最终结论
+## ✅ Final Conclusion
 
-### Can Jetson Orin Nano Super Hold住？
+### Can Jetson Orin Nano Super Handle It?
 
-**答案**: ✅ **可以！但需要优化**
+**Answer**: ✅ **Yes! But optimization needed**
 
-### 推荐配置（15W模式，30+ FPS）
+### Recommended Configuration (15W mode, 30+ FPS)
 
 ```yaml
 name: "Jetson Orin Nano Super Optimized"
@@ -288,20 +288,20 @@ device: cuda:0
 
 models:
   person:
-    model: yolov8s.pt  # 轻量级
+    model: yolov8s.pt  # Lightweight
     device: cuda:0
 
   pose:
-    backend: rtmpose   # 替换MediaPipe
+    backend: rtmpose   # Replace MediaPipe
     model: rtmpose-s
     device: cuda:0
 
 camera:
   fps: 30
-  resolution: [1280, 720]  # 720p足够
+  resolution: [1280, 720]  # 720p sufficient
 
 inference:
-  detection_interval: 1  # 不跳帧
+  detection_interval: 1  # No frame skipping
 
 tensorrt:
   enabled: true
@@ -309,29 +309,29 @@ tensorrt:
   workspace_size: 2048
 ```
 
-**预期性能**:
+**Expected Performance**:
 - **FPS**: 30-35 FPS
-- **功耗**: 15W
-- **精度**: 与PC相当（mAP差异<3%）
-- **延迟**: <30ms
+- **Power**: 15W
+- **Accuracy**: Comparable to PC (mAP difference <3%)
+- **Latency**: <30ms
 
 ---
 
-## 🚀 部署步骤
+## 🚀 Deployment Steps
 
-### 1. JetPack安装
+### 1. JetPack Installation
 ```bash
-# 使用NVIDIA SDK Manager刷入JetPack 5.1.2+
-# 包含：
+# Use NVIDIA SDK Manager to flash JetPack 5.1.2+
+# Includes:
 # - Ubuntu 20.04
 # - CUDA 11.4
 # - cuDNN 8.6
 # - TensorRT 8.5
 ```
 
-### 2. 安装依赖
+### 2. Install Dependencies
 ```bash
-# PyTorch (Jetson专用版)
+# PyTorch (Jetson special version)
 wget https://nvidia.box.com/shared/static/[...].whl
 pip install torch-*.whl
 
@@ -344,74 +344,74 @@ pip install openmim
 mim install mmcv-full
 mim install mmpose
 
-# 其他依赖
+# Other dependencies
 pip install -r requirements.txt
 ```
 
-### 3. 模型优化
+### 3. Model Optimization
 ```bash
-# 转换YOLOv8为TensorRT
+# Convert YOLOv8 to TensorRT
 python scripts/export_tensorrt.py --model yolov8s.pt --device cuda:0
 
-# RTMPose已支持TensorRT，自动优化
+# RTMPose already supports TensorRT, auto-optimized
 ```
 
-### 4. 测试性能
+### 4. Test Performance
 ```bash
-# 运行性能测试
+# Run performance test
 python main.py --config config/config_jetson.yaml --benchmark
 ```
 
 ---
 
-## 💰 成本效益分析
+## 💰 Cost-Benefit Analysis
 
-| 方案 | 设备 | 成本 | 功耗 | FPS | 性价比 |
+| Solution | Device | Cost | Power | FPS | Value |
 |------|------|------|------|-----|--------|
-| **方案A** | RTX 4070 PC | $1500+ | 300W | 60 FPS | ⭐⭐ |
-| **方案B** | Jetson Orin Nano Super | $249 | 15W | 35 FPS | ⭐⭐⭐⭐⭐ |
-| **方案C** | Jetson AGX Orin | $999 | 40W | 80 FPS | ⭐⭐⭐ |
+| **Solution A** | RTX 4070 PC | $1500+ | 300W | 60 FPS | ⭐⭐ |
+| **Solution B** | Jetson Orin Nano Super | $249 | 15W | 35 FPS | ⭐⭐⭐⭐⭐ |
+| **Solution C** | Jetson AGX Orin | $999 | 40W | 80 FPS | ⭐⭐⭐ |
 
-**推荐**: **Jetson Orin Nano Super** - 最佳性价比，适合量产部署
-
----
-
-## 🎯 总结
-
-### Jetson Orin Nano Super 完全可以胜任！
-
-**优势**:
-- ✅ 算力足够（67 TOPS）
-- ✅ 内存充足（8GB）
-- ✅ 功耗低（15W）
-- ✅ 成本低（$249）
-- ✅ 体积小（适合嵌入式）
-
-**需要做的优化**:
-1. 🔧 YOLOv8m → YOLOv8s（或YOLOv8n）
-2. 🔧 MediaPipe → RTMPose（GPU加速）
-3. 🔧 启用TensorRT优化
-4. 🔧 降低分辨率到720p（可选）
-
-**优化后性能**:
-- **FPS**: 30-40 FPS（久坐检测完全够用）
-- **功耗**: 15W（可24小时运行）
-- **精度**: 与PC相当
-- **延迟**: <30ms
-
-**适用场景**:
-- ✅ 家庭久坐监测
-- ✅ 办公室健康管理
-- ✅ 边缘AI部署
-- ✅ 低功耗长期运行
-
-**不适合的场景**:
-- ❌ 高速运动追踪（需要60+ FPS）
-- ❌ 多人同时检测（>5人）
-- ❌ 4K分辨率实时处理
+**Recommendation**: **Jetson Orin Nano Super** - Best value, suitable for mass production deployment
 
 ---
 
-**结论**: Jetson Orin Nano Super **完全Hold得住**这个久坐提醒系统！💪
+## 🎯 Summary
 
-只需要按照上述优化方案调整配置，就能以**15W功耗**实现**30+ FPS**的流畅体验，完美适配三阶段部署路线图的第三阶段（Jetson生产环境）！
+### Jetson Orin Nano Super Can Definitely Handle It!
+
+**Advantages**:
+- ✅ Sufficient computing power (67 TOPS)
+- ✅ Ample memory (8GB)
+- ✅ Low power (15W)
+- ✅ Low cost ($249)
+- ✅ Small size (suitable for embedded)
+
+**Optimizations Needed**:
+1. 🔧 YOLOv8m → YOLOv8s (or YOLOv8n)
+2. 🔧 MediaPipe → RTMPose (GPU acceleration)
+3. 🔧 Enable TensorRT optimization
+4. 🔧 Lower resolution to 720p (optional)
+
+**Optimized Performance**:
+- **FPS**: 30-40 FPS (fully sufficient for prolonged sitting detection)
+- **Power**: 15W (can run 24 hours)
+- **Accuracy**: Comparable to PC
+- **Latency**: <30ms
+
+**Suitable Scenarios**:
+- ✅ Home prolonged sitting monitoring
+- ✅ Office health management
+- ✅ Edge AI deployment
+- ✅ Low-power long-term operation
+
+**Unsuitable Scenarios**:
+- ❌ High-speed motion tracking (requires 60+ FPS)
+- ❌ Multi-person simultaneous detection (>5 people)
+- ❌ 4K resolution real-time processing
+
+---
+
+**Conclusion**: Jetson Orin Nano Super **can definitely handle** this prolonged sitting reminder system! 💪
+
+Just follow the optimization plan above to adjust the configuration, and you can achieve **30+ FPS** smooth experience with **15W power**, perfectly fitting the third phase (Jetson production environment) of the three-stage deployment roadmap!

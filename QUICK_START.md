@@ -1,341 +1,344 @@
-# 久坐提醒系统 - 快速开始指南
+# Prolonged Sitting Reminder System - Quick Start Guide
 
-## ✅ 已完成的功能
+## ✅ Completed Features
 
-### 1. SessionTracker (时长统计) ✅
-- 自动追踪坐/站/躺时长
-- 今日/本周统计
-- 久坐检测（>30分钟）
-- 数据持久化到SQLite
+### 1. SessionTracker (Duration Statistics) ✅
+- Automatic tracking of sitting/standing/lying duration
+- Today/weekly statistics
+- Prolonged sitting detection (>30 minutes)
+- Data persistence to SQLite
 
-### 2. Web Dashboard (数据可视化) ✅
-- 实时状态监控
-- 交互式图表（饼图、折线图）
-- 响应式设计（手机/平板/桌面）
-- 自动刷新（每30秒）
+### 2. Web Dashboard (Data Visualization) ✅
+- Real-time status monitoring
+- Interactive charts (pie charts, line charts)
+- Responsive design (mobile/tablet/desktop)
+- Auto-refresh (every 30 seconds)
 
-### 3. AI Prediction (智能预测) ✅
-- 预测下次坐姿时长
-- 推荐最佳提醒间隔
-- 异常行为检测
-- 个性化建议
+### 3. AI Prediction (Smart Prediction) ✅
+- Predict next sitting duration
+- Recommend optimal reminder interval
+- Anomaly behavior detection
+- Personalized suggestions
 
 ---
 
-## 🚀 三步快速开始
+## 🚀 Quick Start in 3 Steps
 
-### Step 1: 运行主程序（记录数据）
+### Step 1: Run Main Program (Record Data)
 
 ```bash
-# 安装依赖
+# Install dependencies
 pip install -r requirements.txt
 
-# 启动摄像头监测
+# Start camera monitoring
 python main.py --config config/config_gpu.yaml
 
-# 让它运行一段时间，记录你的活动
-# 建议至少运行30分钟-1小时，以便有足够数据
+# Let it run for a while to record your activities
+# Recommend at least 30 minutes to 1 hour for sufficient data
 ```
 
-**这一步会做什么？**
-- 打开摄像头
-- 检测你的姿态（坐/站/躺）
-- 自动记录每个状态的时长
-- 保存数据到 `data/database.db`
+**What does this step do?**
+- Opens camera
+- Detects your posture (sitting/standing/lying)
+- Automatically records duration of each state
+- Saves data to `data/database.db`
 
 ---
 
-### Step 2: 查看统计数据（命令行）
+### Step 2: View Statistics (Command Line)
 
 ```bash
-# 在另一个终端运行
+# Run in another terminal
 python query_stats.py
 ```
 
-**你会看到：**
+**You will see:**
 ```
-📊 SessionTracker 统计数据
+📊 SessionTracker Statistics
 ============================================================
 
-【今日统计】
-日期: 2025-11-08
-总会话数: 15
+【Today's Statistics】
+Date: 2025-11-08
+Total sessions: 15
 
-  🪑 坐姿: 2h 30m (2.50h)
-  🧍 站立: 1h 15m (1.25h)
-  🛏️  躺卧: 0h 20m (0.33h)
+  🪑 Sitting: 2h 30m (2.50h)
+  🧍 Standing: 1h 15m (1.25h)
+  🛏️  Lying: 0h 20m (0.33h)
 
-【当前会话】
-  状态: sitting
-  时长: 5m
-  区域: chair
+【Current Session】
+  Status: sitting
+  Duration: 5m
+  Zone: chair
 
-【坐姿详细统计】
-  总时长: 150.0 分钟 (2.50h)
-  会话次数: 8
-  平均每次: 18.8 分钟
-  最长一次: 45.0 分钟
+【Detailed Sitting Statistics】
+  Total duration: 150.0 minutes (2.50h)
+  Session count: 8
+  Average per session: 18.8 minutes
+  Longest session: 45.0 minutes
 
-【本周统计】
-  周期: 2025-11-04 到 2025-11-10
+【Weekly Statistics】
+  Period: 2025-11-04 to 2025-11-10
   ...
 ```
 
 ---
 
-### Step 3: 启动Web Dashboard（可视化界面）
+### Step 3: Launch Web Dashboard (Visualization Interface)
 
 ```bash
-# 启动Web服务器
+# Start web server
 python web_dashboard.py
 
-# 打开浏览器访问
+# Open browser and visit
 # http://127.0.0.1:5000
 ```
 
-**你会看到：**
-- 📍 **当前状态**: 实时显示正在坐/站/躺
-- 📊 **今日统计**: 四个卡片显示坐姿、站立、躺卧时长和会话数
-- 💺 **坐姿详细**: 总时长、会话次数、平均时长、最长时长
-- 📊 **活动饼图**: 可视化今日时间分配
-- 📈 **本周趋势**: 折线图显示过去7天的变化
-- 🔮 **智能预测**: AI预测下次坐姿时长和建议提醒间隔
-- 🔍 **异常检测**: 自动识别今日坐姿是否异常
+**You will see:**
+- 📍 **Current Status**: Real-time display of sitting/standing/lying
+- 📊 **Today's Statistics**: Four cards showing sitting, standing, lying duration and session count
+- 💺 **Detailed Sitting**: Total duration, session count, average duration, longest duration
+- 📊 **Activity Pie Chart**: Visualize today's time allocation
+- 📈 **Weekly Trend**: Line chart showing changes over the past 7 days
+- 🔮 **Smart Prediction**: AI predicts next sitting duration and suggested reminder interval
+- 🔍 **Anomaly Detection**: Automatically identify abnormal sitting behavior today
 
-**久坐警告：**
-- 当你坐姿超过30分钟，顶部会显示红色警告横幅！
+**Prolonged Sitting Warning:**
+- When you sit for more than 30 minutes, a red warning banner will appear at the top!
 
 ---
 
-## 📂 项目文件说明
+## 📂 Project File Structure
 
 ```
 Camera/
-├── main.py                          # 主程序（摄像头监测）
-├── query_stats.py                   # 命令行查询统计
-├── web_dashboard.py                 # Web可视化服务器
+├── main.py                          # Main program (camera monitoring)
+├── query_stats.py                   # Command line statistics query
+├── web_dashboard.py                 # Web visualization server
 ├── config/
-│   ├── config_gpu.yaml              # GPU配置（推荐）
-│   └── config_cpu.yaml              # CPU配置
+│   ├── config_gpu.yaml              # GPU configuration (recommended)
+│   └── config_cpu.yaml              # CPU configuration
 ├── data/
-│   └── database.db                  # SQLite数据库（自动创建）
+│   └── database.db                  # SQLite database (auto-created)
 ├── src/
 │   ├── analytics/
-│   │   ├── session_tracker.py       # 时长统计模块
-│   │   └── predictor.py             # AI预测模块
+│   │   ├── session_tracker.py       # Duration statistics module
+│   │   └── predictor.py             # AI prediction module
 │   ├── state/
-│   │   └── behavior_state.py        # 状态机（集成SessionTracker）
+│   │   └── behavior_state.py        # State machine (integrated SessionTracker)
 │   └── storage/
-│       ├── database.py              # 数据库操作
-│       └── event_logger.py          # 事件记录
+│       ├── database.py              # Database operations
+│       └── event_logger.py          # Event logging
 ├── templates/
-│   └── dashboard.html               # Web界面HTML
+│   └── dashboard.html               # Web interface HTML
 ├── static/
-│   ├── css/style.css                # 样式
-│   └── js/dashboard.js              # 前端逻辑
-├── 如何运行.md                      # 详细运行指南
-├── WEB_DASHBOARD_使用指南.md        # Web功能说明
-└── SESSION_TRACKER_IMPLEMENTATION.md # 技术文档
+│   ├── css/style.css                # Styles
+│   └── js/dashboard.js              # Frontend logic
+├── HOW_TO_RUN.md                    # Detailed running guide
+├── WEB_DASHBOARD_GUIDE.md           # Web feature description
+└── SESSION_TRACKER_IMPLEMENTATION.md # Technical documentation
 ```
 
 ---
 
-## 🎯 使用场景
+## 🎯 Use Cases
 
-### 场景1: 日常监测
+### Scenario 1: Daily Monitoring
 ```bash
-# 早上开机后启动
+# Start after booting up in the morning
 python main.py --config config/config_gpu.yaml
 
-# 全天运行，自动记录你的活动
-# 随时打开 http://127.0.0.1:5000 查看数据
+# Run all day, automatically record your activities
+# Open http://127.0.0.1:5000 anytime to view data
 ```
 
-### 场景2: 每日回顾
+### Scenario 2: Daily Review
 ```bash
-# 晚上下班后查看今日统计
+# Check today's statistics after work in the evening
 python query_stats.py
 
-# 或打开Web Dashboard查看详细图表和预测
+# Or open Web Dashboard to view detailed charts and predictions
 ```
 
-### 场景3: 久坐提醒
+### Scenario 3: Prolonged Sitting Reminder
 ```bash
-# 启动主程序
+# Start main program
 python main.py --config config/config_gpu.yaml
 
-# 同时启动Web Dashboard
+# Also start Web Dashboard
 python web_dashboard.py
 
-# 打开浏览器，当坐姿超过30分钟会自动显示警告
+# Open browser, warnings will automatically appear when sitting exceeds 30 minutes
 ```
 
 ---
 
-## 🔧 常见问题快速解决
+## 🔧 Quick Troubleshooting
 
-### Q1: 第一次运行query_stats.py显示所有数据为0？
-**A**: 正常！需要先运行 `main.py` 记录一些活动数据。
+### Q1: First time running query_stats.py shows all data as 0?
+**A**: Normal! Need to run `main.py` first to record some activity data.
 
-### Q2: Web Dashboard预测显示"累积更多数据后将提供预测"？
-**A**: 预测需要至少3次坐姿记录。建议使用3-7天后再查看预测功能。
+### Q2: Web Dashboard prediction shows "Predictions will be available after accumulating more data"?
+**A**: Prediction requires at least 3 sitting records. Recommend checking the prediction feature after 3-7 days of use.
 
-### Q3: main.py报错 "无法打开摄像头"？
-**A**: 检查：
-1. 摄像头是否被其他程序占用
-2. 修改 `config/config_gpu.yaml` 中的 `camera.source` (0, 1, 2...)
+### Q3: main.py error "Unable to open camera"?
+**A**: Check:
+1. Whether the camera is occupied by other programs
+2. Modify `camera.source` in `config/config_gpu.yaml` (0, 1, 2...)
 
-### Q4: Web Dashboard无法访问？
-**A**: 确认：
-1. `python web_dashboard.py` 正在运行
-2. 浏览器访问 http://127.0.0.1:5000 (注意端口号)
+### Q4: Cannot access Web Dashboard?
+**A**: Confirm:
+1. `python web_dashboard.py` is running
+2. Browser visits http://127.0.0.1:5000 (note the port number)
 
-### Q5: 想在手机上查看数据？
+### Q5: Want to view data on mobile?
 **A**:
 ```bash
-# 启动时允许局域网访问
+# Allow LAN access when starting
 python web_dashboard.py --host 0.0.0.0
 
-# 手机浏览器访问
-http://[你的电脑IP]:5000
-# 例如: http://192.168.1.100:5000
+# Visit in mobile browser
+http://[your_computer_IP]:5000
+# For example: http://192.168.1.100:5000
 ```
 
 ---
 
-## 📊 API使用示例
+## 📊 API Usage Examples
 
-### Python调用
+### Python Call
 ```python
 from src.storage.database import Database
 from src.analytics.session_tracker import SessionTracker
 from src.analytics.predictor import SittingPredictor
 
-# 创建实例
+# Create instances
 db = Database('data/database.db')
 tracker = SessionTracker(database=db)
 predictor = SittingPredictor(database=db)
 
-# 获取今日统计
+# Get today's statistics
 stats = tracker.get_today_statistics()
-print(f"今日坐姿: {stats['sitting_duration']/3600:.1f}小时")
+print(f"Today's sitting: {stats['sitting_duration']/3600:.1f} hours")
 
-# 预测下次坐姿时长
+# Predict next sitting duration
 prediction = predictor.predict_next_sitting_duration()
-print(f"预测下次坐姿: {prediction['predicted_duration_minutes']}分钟")
-print(f"置信度: {prediction['confidence']*100:.0f}%")
+print(f"Predicted next sitting: {prediction['predicted_duration_minutes']} minutes")
+print(f"Confidence: {prediction['confidence']*100:.0f}%")
 
-# 异常检测
+# Anomaly detection
 anomaly = predictor.detect_anomaly()
 if anomaly['is_anomaly']:
     print(f"⚠️ {anomaly['message']}")
 ```
 
-### JavaScript调用（浏览器）
+### JavaScript Call (Browser)
 ```javascript
-// 获取今日统计
+// Get today's statistics
 fetch('http://127.0.0.1:5000/api/stats/today')
   .then(res => res.json())
   .then(data => {
-    console.log('今日坐姿:', data.data.sitting_duration/3600, '小时');
+    console.log('Today sitting:', data.data.sitting_duration/3600, 'hours');
   });
 
-// 获取预测
+// Get prediction
 fetch('http://127.0.0.1:5000/api/prediction/next_sitting')
   .then(res => res.json())
   .then(data => {
-    console.log('预测时长:', data.data.predicted_duration_minutes, '分钟');
+    console.log('Predicted duration:', data.data.predicted_duration_minutes, 'minutes');
   });
 ```
 
-### curl命令行调用
+### curl Command Line Call
 ```bash
-# 今日统计
+# Today's statistics
 curl http://127.0.0.1:5000/api/stats/today | jq
 
-# 预测
+# Prediction
 curl http://127.0.0.1:5000/api/prediction/next_sitting | jq
 
-# 异常检测
+# Anomaly detection
 curl http://127.0.0.1:5000/api/prediction/anomaly | jq
 ```
 
 ---
 
-## 🎨 截图预览
+## 🎨 Screenshot Preview
 
-### Web Dashboard界面
+### Web Dashboard Interface
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  🪑 久坐提醒系统 - 数据仪表盘                                  │
-│  实时监测您的活动数据，保持健康生活方式                         │
+│  🪑 Prolonged Sitting Reminder System - Data Dashboard       │
+│  Real-time monitoring of your activity data, maintain       │
+│  healthy lifestyle                                           │
 └─────────────────────────────────────────────────────────────┘
 
-⚠️ 久坐警告
-   您已持续坐姿35分钟，建议起身活动！
+⚠️ Prolonged Sitting Warning
+   You have been sitting for 35 minutes, recommend standing up!
 
 ┌─────────────────────────────────────────────────────────────┐
-│ 📍 当前状态                                                   │
-│ 当前状态: 🪑 坐姿    持续时长: 15分钟    所在区域: chair        │
+│ 📍 Current Status                                            │
+│ Current: 🪑 Sitting   Duration: 15 minutes   Zone: chair     │
 └─────────────────────────────────────────────────────────────┘
 
 ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
 │ 🪑       │ │ 🧍       │ │ 🛏️       │ │ 📊       │
-│ 坐姿时长  │ │ 站立时长  │ │ 躺卧时长  │ │ 会话次数  │
-│ 2.5小时  │ │ 1.2小时  │ │ 0.3小时  │ │ 15       │
+│ Sitting  │ │ Standing │ │ Lying    │ │ Sessions │
+│ 2.5h     │ │ 1.2h     │ │ 0.3h     │ │ 15       │
 └──────────┘ └──────────┘ └──────────┘ └──────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ 💺 坐姿详细统计                                               │
-│ 总时长: 2.5h  会话次数: 8  平均时长: 18.8m  最长一次: 45.0m   │
+│ 💺 Detailed Sitting Statistics                               │
+│ Total: 2.5h  Sessions: 8  Average: 18.8m  Longest: 45.0m    │
 └─────────────────────────────────────────────────────────────┘
 
 ┌──────────────────┐  ┌──────────────────────────────────────┐
-│ 📊 今日活动分布   │  │ 📈 本周活动趋势                       │
-│  [饼图]          │  │  [折线图]                            │
+│ 📊 Today's       │  │ 📈 Weekly Activity Trend              │
+│    Activity      │  │  [Line chart]                        │
+│    Distribution  │  │                                      │
+│  [Pie chart]     │  │                                      │
 └──────────────────┘  └──────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ 🔮 智能预测                                                   │
-│ 🎯 预测下次坐姿时长: 45分钟  ⏰ 建议提醒间隔: 25分钟           │
-│ 置信度: 75%                                                  │
+│ 🔮 Smart Prediction                                          │
+│ 🎯 Predicted next sitting: 45 min  ⏰ Suggested interval: 25 min │
+│ Confidence: 75%                                              │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ 🔍 今日异常检测                                               │
-│ ✅ 今日坐姿时长正常                                           │
-│ 今日: 2.5h  历史平均: 2.8h  偏差: -10.7%                      │
+│ 🔍 Today's Anomaly Detection                                 │
+│ ✅ Today's sitting duration is normal                        │
+│ Today: 2.5h  Historical avg: 2.8h  Deviation: -10.7%        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔥 高级功能
+## 🔥 Advanced Features
 
-### 1. 自定义提醒阈值
-编辑 `config/config_gpu.yaml`:
+### 1. Customize Reminder Threshold
+Edit `config/config_gpu.yaml`:
 ```yaml
 session_tracking:
-  prolonged_sitting_threshold: 25  # 改为25分钟
+  prolonged_sitting_threshold: 25  # Change to 25 minutes
 ```
 
-### 2. 导出数据到CSV
+### 2. Export Data to CSV
 ```bash
 sqlite3 -header -csv data/database.db \
   "SELECT * FROM state_history;" > my_activity_data.csv
 ```
 
-### 3. 局域网多设备访问
+### 3. LAN Multi-device Access
 ```bash
-# 服务器端
+# Server side
 python web_dashboard.py --host 0.0.0.0 --port 5000
 
-# 同一WiFi下的其他设备访问
-# http://[电脑IP]:5000
+# Other devices on the same WiFi
+# http://[computer_IP]:5000
 ```
 
-### 4. 生产环境部署
+### 4. Production Environment Deployment
 ```bash
 pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:5000 web_dashboard:app
@@ -343,37 +346,37 @@ gunicorn -w 4 -b 0.0.0.0:5000 web_dashboard:app
 
 ---
 
-## 📚 相关文档
+## 📚 Related Documentation
 
-- **如何运行.md** - 完整的安装和运行指南
-- **WEB_DASHBOARD_使用指南.md** - Web功能详细说明
-- **SESSION_TRACKER_IMPLEMENTATION.md** - 技术实现文档
+- **HOW_TO_RUN.md** - Complete installation and running guide
+- **WEB_DASHBOARD_GUIDE.md** - Detailed web feature description
+- **SESSION_TRACKER_IMPLEMENTATION.md** - Technical implementation documentation
 
 ---
 
-## ✨ 总结
+## ✨ Summary
 
-你现在拥有一个**完整的久坐提醒系统**：
+You now have a **complete prolonged sitting reminder system**:
 
-1. ✅ **数据采集** - main.py 自动记录活动
-2. ✅ **数据存储** - SQLite 持久化
-3. ✅ **数据查询** - query_stats.py 命令行查询
-4. ✅ **数据可视化** - Web Dashboard 图表展示
-5. ✅ **智能预测** - AI 预测和建议
-6. ✅ **异常检测** - 自动识别异常行为
-7. ✅ **久坐警告** - 实时提醒
+1. ✅ **Data Collection** - main.py automatically records activities
+2. ✅ **Data Storage** - SQLite persistence
+3. ✅ **Data Query** - query_stats.py command line query
+4. ✅ **Data Visualization** - Web Dashboard chart display
+5. ✅ **Smart Prediction** - AI prediction and suggestions
+6. ✅ **Anomaly Detection** - Automatically identify abnormal behavior
+7. ✅ **Prolonged Sitting Warning** - Real-time reminders
 
-**现在就开始使用吧！** 🎉
+**Start using it now!** 🎉
 
 ```bash
-# Terminal 1: 启动监测
+# Terminal 1: Start monitoring
 python main.py --config config/config_gpu.yaml
 
-# Terminal 2: 启动Web Dashboard
+# Terminal 2: Start Web Dashboard
 python web_dashboard.py
 
-# Browser: 打开浏览器
+# Browser: Open browser
 # http://127.0.0.1:5000
 ```
 
-**祝你拥有健康的工作习惯！** 💪
+**Wishing you healthy work habits!** 💪

@@ -1,105 +1,105 @@
-# RTMPose 技术方案对比 - MediaPipe vs RTMPose
+# RTMPose Technical Solution Comparison - MediaPipe vs RTMPose
 
-## 🎯 未来方向：是的，建议从MediaPipe迁移到RTMPose！
+## 🎯 Future Direction: Yes, Recommend Migrating from MediaPipe to RTMPose!
 
-### 为什么要换？
+### Why Switch?
 
-| 对比项 | MediaPipe | RTMPose | 优势 |
+| Comparison | MediaPipe | RTMPose | Advantage |
 |-------|-----------|---------|------|
-| **设备支持** | ❌ 只支持CPU | ✅ CPU + GPU | GPU加速 |
-| **速度（Jetson）** | 50ms (CPU) | 12ms (GPU) | **4倍提升** 🚀 |
-| **精度** | ⭐⭐⭐ 良好 | ⭐⭐⭐⭐ 优秀 | 更准确 |
-| **可定制性** | ❌ 封闭 | ✅ 开源可改 | 灵活 |
-| **模型选择** | 固定 | 多种规格 | 可扩展 |
-| **TensorRT支持** | ❌ 不支持 | ✅ 原生支持 | 进一步加速 |
-| **Jetson优化** | ❌ 差 | ✅ 优秀 | 专门优化 |
+| **Device Support** | ❌ CPU only | ✅ CPU + GPU | GPU acceleration |
+| **Speed (Jetson)** | 50ms (CPU) | 12ms (GPU) | **4x improvement** 🚀 |
+| **Accuracy** | ⭐⭐⭐ Good | ⭐⭐⭐⭐ Excellent | More accurate |
+| **Customizability** | ❌ Closed | ✅ Open source modifiable | Flexible |
+| **Model Selection** | Fixed | Multiple options | Scalable |
+| **TensorRT Support** | ❌ Not supported | ✅ Native support | Further acceleration |
+| **Jetson Optimization** | ❌ Poor | ✅ Excellent | Specifically optimized |
 
-**结论**: RTMPose是未来趋势，特别是对Jetson等边缘设备！
+**Conclusion**: RTMPose is the future trend, especially for edge devices like Jetson!
 
 ---
 
-## 📊 RTMPose模型系列对比
+## 📊 RTMPose Model Series Comparison
 
-### 1. RTMPose模型规格
+### 1. RTMPose Model Specifications
 
-RTMPose提供了多种规格的模型，从tiny到large：
+RTMPose provides multiple model sizes, from tiny to large:
 
-| 模型 | 参数量 | FLOPs | 精度(AP) | Jetson推理时间 | 适用场景 |
+| Model | Parameters | FLOPs | Accuracy(AP) | Jetson Inference Time | Use Case |
 |------|--------|-------|----------|----------------|---------|
-| **RTMPose-tiny** | 1.4M | 0.4G | 65.9% | **~8ms** | 超低功耗、电池供电 |
-| **RTMPose-s** | 4.5M | 0.9G | 68.6% | **~12ms** | 标准部署（推荐） |
-| **RTMPose-m** | 13.6M | 2.2G | 72.7% | ~20ms | 高精度需求 |
-| **RTMPose-l** | 27.7M | 4.5G | 75.3% | ~35ms | 桌面PC、服务器 |
+| **RTMPose-tiny** | 1.4M | 0.4G | 65.9% | **~8ms** | Ultra-low power, battery powered |
+| **RTMPose-s** | 4.5M | 0.9G | 68.6% | **~12ms** | Standard deployment (recommended) |
+| **RTMPose-m** | 13.6M | 2.2G | 72.7% | ~20ms | High accuracy requirements |
+| **RTMPose-l** | 27.7M | 4.5G | 75.3% | ~35ms | Desktop PC, servers |
 
-**对比MediaPipe**:
+**Compared to MediaPipe**:
 - MediaPipe Pose (CPU): ~50ms, AP ~67%
 - RTMPose-s (GPU): ~12ms, AP 68.6%
-- **RTMPose又快又准！**
+- **RTMPose is both fast and accurate!**
 
 ---
 
-### 2. 优化技术对比
+### 2. Optimization Technique Comparison
 
-RTMPose支持多种优化技术：
+RTMPose supports multiple optimization techniques:
 
-#### A. FP16 (半精度)
+#### A. FP16 (Half Precision)
 ```yaml
 tensorrt:
   enabled: true
-  fp16_mode: true  # 使用半精度浮点
+  fp16_mode: true  # Use half precision floating point
 ```
 
-**特点**:
-- 速度: **1.5-2倍提升**
-- 精度损失: **<0.5%**（几乎无损）
-- 内存占用: **减半**
-- 推荐场景: **标准部署**
+**Characteristics**:
+- Speed: **1.5-2x improvement**
+- Accuracy loss: **<0.5%** (almost lossless)
+- Memory usage: **Halved**
+- Recommended scenario: **Standard deployment**
 
-**示例**: RTMPose-s
+**Example**: RTMPose-s
 - FP32: 18ms
-- FP16: **12ms** ✅（推荐）
+- FP16: **12ms** ✅ (recommended)
 
 ---
 
-#### B. INT8 (整数量化)
+#### B. INT8 (Integer Quantization)
 ```yaml
 tensorrt:
   enabled: true
-  int8_mode: true  # 使用8位整数
-  calibration: true  # 需要校准数据
+  int8_mode: true  # Use 8-bit integers
+  calibration: true  # Requires calibration data
 ```
 
-**特点**:
-- 速度: **2-3倍提升**
-- 精度损失: **1-3%**（可接受）
-- 内存占用: **1/4**
-- 推荐场景: **极致性能、低功耗**
+**Characteristics**:
+- Speed: **2-3x improvement**
+- Accuracy loss: **1-3%** (acceptable)
+- Memory usage: **1/4**
+- Recommended scenario: **Ultimate performance, low power**
 
-**示例**: RTMPose-s
+**Example**: RTMPose-s
 - FP32: 18ms
 - FP16: 12ms
-- INT8: **8ms** 🚀（极致）
+- INT8: **8ms** 🚀 (ultimate)
 
 ---
 
-### 3. 完整对比表
+### 3. Complete Comparison Table
 
-| 配置 | 推理时间 | 精度 | 内存 | 功耗 | 推荐指数 |
+| Configuration | Inference Time | Accuracy | Memory | Power | Rating |
 |------|---------|------|------|------|---------|
-| **MediaPipe (CPU)** | 50ms | AP 67% | 30MB | 高 | ⭐⭐ |
-| **RTMPose-tiny FP32** | 15ms | AP 66% | 6MB | 低 | ⭐⭐⭐ |
-| **RTMPose-tiny FP16** | 10ms | AP 66% | 3MB | 低 | ⭐⭐⭐⭐ |
-| **RTMPose-tiny INT8** | **8ms** | AP 65% | 2MB | 极低 | ⭐⭐⭐⭐ (省电) |
-| **RTMPose-s FP32** | 18ms | AP 68.6% | 18MB | 中 | ⭐⭐⭐ |
-| **RTMPose-s FP16** | **12ms** | AP 68.5% | 9MB | 中 | ⭐⭐⭐⭐⭐ (推荐) |
-| **RTMPose-s INT8** | **10ms** | AP 67.5% | 5MB | 低 | ⭐⭐⭐⭐ |
-| **RTMPose-m FP16** | 20ms | AP 72.6% | 14MB | 高 | ⭐⭐⭐ (高精度) |
+| **MediaPipe (CPU)** | 50ms | AP 67% | 30MB | High | ⭐⭐ |
+| **RTMPose-tiny FP32** | 15ms | AP 66% | 6MB | Low | ⭐⭐⭐ |
+| **RTMPose-tiny FP16** | 10ms | AP 66% | 3MB | Low | ⭐⭐⭐⭐ |
+| **RTMPose-tiny INT8** | **8ms** | AP 65% | 2MB | Very low | ⭐⭐⭐⭐ (power saving) |
+| **RTMPose-s FP32** | 18ms | AP 68.6% | 18MB | Medium | ⭐⭐⭐ |
+| **RTMPose-s FP16** | **12ms** | AP 68.5% | 9MB | Medium | ⭐⭐⭐⭐⭐ (recommended) |
+| **RTMPose-s INT8** | **10ms** | AP 67.5% | 5MB | Low | ⭐⭐⭐⭐ |
+| **RTMPose-m FP16** | 20ms | AP 72.6% | 14MB | High | ⭐⭐⭐ (high accuracy) |
 
 ---
 
-## 🤔 RTMPose-s FP16 vs RTMPose-tiny INT8：如何选择？
+## 🤔 RTMPose-s FP16 vs RTMPose-tiny INT8: How to Choose?
 
-### 方案A: RTMPose-s + FP16（推荐）
+### Option A: RTMPose-s + FP16 (Recommended)
 
 ```yaml
 models:
@@ -114,31 +114,31 @@ tensorrt:
   int8_mode: false
 ```
 
-**性能指标**:
-- 推理时间: **12ms**
-- 精度: AP **68.5%**（接近原始精度）
-- 内存: 9MB
-- 功耗: 中等（15W模式）
+**Performance Metrics**:
+- Inference time: **12ms**
+- Accuracy: AP **68.5%** (close to original accuracy)
+- Memory: 9MB
+- Power: Medium (15W mode)
 
-**优点**:
-- ✅ 精度高（68.5% vs MediaPipe的67%）
-- ✅ 速度快（12ms vs MediaPipe的50ms）
-- ✅ 精度损失小（<0.1%）
-- ✅ 无需校准数据
-- ✅ 部署简单
+**Advantages**:
+- ✅ High accuracy (68.5% vs MediaPipe's 67%)
+- ✅ Fast speed (12ms vs MediaPipe's 50ms)
+- ✅ Small accuracy loss (<0.1%)
+- ✅ No calibration data needed
+- ✅ Simple deployment
 
-**缺点**:
-- ⚠️ 比INT8稍慢（12ms vs 8-10ms）
+**Disadvantages**:
+- ⚠️ Slightly slower than INT8 (12ms vs 8-10ms)
 
-**适用场景**:
-- ✅ **标准部署（推荐）**
-- ✅ 对精度有要求
-- ✅ 15W功耗模式
-- ✅ 实时性要求不是极端严格
+**Use Cases**:
+- ✅ **Standard deployment (recommended)**
+- ✅ Accuracy requirements
+- ✅ 15W power mode
+- ✅ Real-time requirements not extremely strict
 
 ---
 
-### 方案B: RTMPose-tiny + INT8（极致性能）
+### Option B: RTMPose-tiny + INT8 (Ultimate Performance)
 
 ```yaml
 models:
@@ -151,101 +151,101 @@ tensorrt:
   enabled: true
   fp16_mode: false
   int8_mode: true
-  calibration_data: "calibration_images/"  # 需要校准数据
+  calibration_data: "calibration_images/"  # Requires calibration data
 ```
 
-**性能指标**:
-- 推理时间: **8ms**
-- 精度: AP **65%**（损失~3%）
-- 内存: 2MB
-- 功耗: 极低（7W模式）
+**Performance Metrics**:
+- Inference time: **8ms**
+- Accuracy: AP **65%** (loss ~3%)
+- Memory: 2MB
+- Power: Very low (7W mode)
 
-**优点**:
-- ✅ 速度最快（8ms）
-- ✅ 功耗最低（7W模式可用）
-- ✅ 内存占用最小（2MB）
-- ✅ 适合电池供电
+**Advantages**:
+- ✅ Fastest speed (8ms)
+- ✅ Lowest power (7W mode available)
+- ✅ Smallest memory footprint (2MB)
+- ✅ Suitable for battery powered
 
-**缺点**:
-- ⚠️ 精度损失（65% vs 68.5%）
-- ⚠️ 需要校准数据（部署复杂）
-- ⚠️ 边缘case可能不准确
+**Disadvantages**:
+- ⚠️ Accuracy loss (65% vs 68.5%)
+- ⚠️ Requires calibration data (complex deployment)
+- ⚠️ Edge cases may be inaccurate
 
-**适用场景**:
-- ✅ 极致低功耗需求
-- ✅ 电池供电场景
-- ✅ 7W功耗模式
-- ✅ 对精度要求不严格
+**Use Cases**:
+- ✅ Ultimate low power requirements
+- ✅ Battery powered scenarios
+- ✅ 7W power mode
+- ✅ Less strict accuracy requirements
 
 ---
 
-### 方案C: RTMPose-s + INT8（平衡方案）
+### Option C: RTMPose-s + INT8 (Balanced)
 
 ```yaml
 models:
   pose:
     backend: rtmpose
-    model: rtmpose-s  # 用s模型
+    model: rtmpose-s  # Use s model
     device: cuda:0
 
 tensorrt:
   enabled: true
   fp16_mode: false
-  int8_mode: true   # 但用INT8量化
+  int8_mode: true   # But use INT8 quantization
 ```
 
-**性能指标**:
-- 推理时间: **10ms**
-- 精度: AP **67.5%**（损失~1%）
-- 内存: 5MB
-- 功耗: 低（15W模式）
+**Performance Metrics**:
+- Inference time: **10ms**
+- Accuracy: AP **67.5%** (loss ~1%)
+- Memory: 5MB
+- Power: Low (15W mode)
 
-**特点**: **精度和速度的最佳平衡**
+**Characteristics**: **Best balance of accuracy and speed**
 
-**适用场景**:
-- ✅ 想要高精度但也想要低延迟
-- ✅ 15W功耗但追求性能
+**Use Cases**:
+- ✅ Want high accuracy but also low latency
+- ✅ 15W power but pursuing performance
 
 ---
 
-## 🎯 推荐方案决策树
+## 🎯 Recommended Solution Decision Tree
 
 ```
-你的需求是什么？
+What are your requirements?
 │
-├─ 追求最佳精度 (AP > 68%)
-│  └─ 选择: RTMPose-s FP16 (12ms, AP 68.5%) ✅
+├─ Pursuing best accuracy (AP > 68%)
+│  └─ Choose: RTMPose-s FP16 (12ms, AP 68.5%) ✅
 │
-├─ 追求极致性能 (<10ms)
-│  ├─ 对精度要求高 (AP > 67%)
-│  │  └─ 选择: RTMPose-s INT8 (10ms, AP 67.5%) ✅
+├─ Pursuing ultimate performance (<10ms)
+│  ├─ High accuracy requirement (AP > 67%)
+│  │  └─ Choose: RTMPose-s INT8 (10ms, AP 67.5%) ✅
 │  │
-│  └─ 对精度要求不高 (AP > 65%)
-│     └─ 选择: RTMPose-tiny INT8 (8ms, AP 65%) ✅
+│  └─ Less strict accuracy (AP > 65%)
+│     └─ Choose: RTMPose-tiny INT8 (8ms, AP 65%) ✅
 │
-├─ 追求低功耗 (7W模式)
-│  └─ 选择: RTMPose-tiny INT8 (8ms, AP 65%) ✅
+├─ Pursuing low power (7W mode)
+│  └─ Choose: RTMPose-tiny INT8 (8ms, AP 65%) ✅
 │
-└─ 平衡性能和精度（大多数情况）
-   └─ 选择: RTMPose-s FP16 (12ms, AP 68.5%) ⭐⭐⭐⭐⭐
+└─ Balance performance and accuracy (most cases)
+   └─ Choose: RTMPose-s FP16 (12ms, AP 68.5%) ⭐⭐⭐⭐⭐
 ```
 
 ---
 
-## 💡 我的推荐
+## 💡 My Recommendation
 
-### 对于久坐检测系统：
+### For Prolonged Sitting Detection System:
 
-**推荐配置: RTMPose-s + FP16**
+**Recommended Configuration: RTMPose-s + FP16**
 
-**理由**:
-1. **精度足够**: AP 68.5%对于坐/站/躺检测完全够用
-2. **速度够快**: 12ms → 83 FPS理论上限，实际30-40 FPS
-3. **无需校准**: FP16不需要额外的校准数据，部署简单
-4. **精度损失小**: 相比FP32只损失0.1%，几乎无损
-5. **功耗合理**: 15W模式，可24小时运行
+**Reasons**:
+1. **Sufficient accuracy**: AP 68.5% is fully sufficient for sit/stand/lie detection
+2. **Fast enough**: 12ms → 83 FPS theoretical limit, actual 30-40 FPS
+3. **No calibration needed**: FP16 doesn't require additional calibration data, simple deployment
+4. **Small accuracy loss**: Only 0.1% loss compared to FP32, almost lossless
+5. **Reasonable power**: 15W mode, can run 24 hours
 
-**配置文件**:
+**Configuration File**:
 ```yaml
 # config/config_jetson.yaml
 name: "Jetson Orin Nano Super - Optimized"
@@ -259,78 +259,78 @@ models:
 
   pose:
     backend: rtmpose
-    model: rtmpose-s_8xb256-420e_coco-256x192  # 推荐
+    model: rtmpose-s_8xb256-420e_coco-256x192  # Recommended
     device: cuda:0
     confidence: 0.3
 
 camera:
   fps: 30
-  resolution: [1280, 720]  # 720p足够
+  resolution: [1280, 720]  # 720p sufficient
 
 inference:
-  detection_interval: 1  # 不跳帧
+  detection_interval: 1  # No frame skipping
 
 tensorrt:
   enabled: true
-  fp16_mode: true      # 使用FP16
-  int8_mode: false     # 不用INT8
+  fp16_mode: true      # Use FP16
+  int8_mode: false     # Don't use INT8
   workspace_size: 2048
 ```
 
-**预期性能**:
+**Expected Performance**:
 - YOLOv8s (TensorRT FP16): 10ms
 - RTMPose-s (TensorRT FP16): 12ms
-- 其他: 3ms
-- **总计: 25ms = 40 FPS** ✅
+- Other: 3ms
+- **Total: 25ms = 40 FPS** ✅
 
 ---
 
-## 🔄 迁移路线图
+## 🔄 Migration Roadmap
 
-### 阶段1: 当前（开发阶段 - PC）
+### Phase 1: Current (Development - PC)
 ```
 YOLOv8m + MediaPipe (CPU)
-→ 性能: 20-25 FPS
-→ 适合: 开发测试
+→ Performance: 20-25 FPS
+→ Suitable for: Development and testing
 ```
 
-### 阶段2: 优化（测试阶段 - PC）
+### Phase 2: Optimization (Testing - PC)
 ```
 YOLOv8s + RTMPose-s FP16
-→ 性能: 50-60 FPS
-→ 适合: 功能验证
+→ Performance: 50-60 FPS
+→ Suitable for: Feature validation
 ```
 
-### 阶段3: 部署（生产阶段 - Jetson）
+### Phase 3: Deployment (Production - Jetson)
 ```
 YOLOv8s + RTMPose-s FP16 + TensorRT
-→ 性能: 30-40 FPS
-→ 适合: 量产部署 ✅
+→ Performance: 30-40 FPS
+→ Suitable for: Mass production deployment ✅
 ```
 
-### 阶段4: 极致优化（可选）
+### Phase 4: Ultimate Optimization (Optional)
 ```
 YOLOv8n + RTMPose-tiny INT8
-→ 性能: 60+ FPS
-→ 适合: 低功耗场景
+→ Performance: 60+ FPS
+→ Suitable for: Low power scenarios
 ```
 
 ---
 
-## 🛠️ 实现步骤
+## 🛠️ Implementation Steps
 
-### Step 1: 安装RTMPose
+### Step 1: Install RTMPose
 ```bash
-# 在PC上测试
+# Test on PC
 pip install openmim
 mim install mmcv-full
 mim install mmpose
 
-# 下载RTMPose-s模型
+# Download RTMPose-s model
 mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/
 ```
 
-### Step 2: 修改代码支持RTMPose
+### Step 2: Modify Code to Support RTMPose
 ```python
 # src/detectors/pose_estimator.py
 
@@ -345,96 +345,96 @@ class RTMPoseEstimator(PoseEstimator):
         )
 
     def estimate(self, image, bbox):
-        # RTMPose推理
+        # RTMPose inference
         results = inference_topdown(self.model, image, bbox)
         return results
 ```
 
-### Step 3: 测试性能
+### Step 3: Test Performance
 ```bash
-# PC上测试
+# Test on PC
 python main.py --config config/config_gpu.yaml --benchmark
 
-# 预期看到: FPS提升到50-60
+# Expected to see: FPS increase to 50-60
 ```
 
-### Step 4: 部署到Jetson
+### Step 4: Deploy to Jetson
 ```bash
-# 在Jetson上
+# On Jetson
 python main.py --config config/config_jetson.yaml
 
-# 预期看到: FPS 30-40
+# Expected to see: FPS 30-40
 ```
 
 ---
 
-## 📈 性能提升对比
+## 📈 Performance Improvement Comparison
 
-### 完整流程对比
+### Full Pipeline Comparison
 
-| 配置 | 人体检测 | 姿态估计 | 总耗时 | FPS | 适用设备 |
+| Configuration | Person Detection | Pose Estimation | Total Time | FPS | Suitable Device |
 |------|---------|---------|--------|-----|---------|
-| **当前 (PC)** | YOLOv8m (15ms) | MediaPipe CPU (50ms) | 65ms | 15 | PC |
-| **优化 (PC)** | YOLOv8s (10ms) | RTMPose-s FP16 (8ms) | 18ms | 55 | PC |
-| **Jetson标准** | YOLOv8s (10ms) | RTMPose-s FP16 (12ms) | 22ms | 45 | Jetson (15W) |
-| **Jetson极致** | YOLOv8n (6ms) | RTMPose-tiny INT8 (8ms) | 14ms | 71 | Jetson (7W) |
+| **Current (PC)** | YOLOv8m (15ms) | MediaPipe CPU (50ms) | 65ms | 15 | PC |
+| **Optimized (PC)** | YOLOv8s (10ms) | RTMPose-s FP16 (8ms) | 18ms | 55 | PC |
+| **Jetson Standard** | YOLOv8s (10ms) | RTMPose-s FP16 (12ms) | 22ms | 45 | Jetson (15W) |
+| **Jetson Ultimate** | YOLOv8n (6ms) | RTMPose-tiny INT8 (8ms) | 14ms | 71 | Jetson (7W) |
 
 ---
 
-## 🎯 总结
+## 🎯 Summary
 
-### 核心问题回答
+### Core Question Answers
 
-**Q1: 未来方向是从MediaPipe换到RTMPose吗？**
-**A**: ✅ **是的！强烈推荐！**
+**Q1: Is the future direction to switch from MediaPipe to RTMPose?**
+**A**: ✅ **Yes! Strongly recommended!**
 
-理由:
-- MediaPipe只支持CPU（慢）
-- RTMPose支持GPU（快4倍）
-- RTMPose精度更高
-- RTMPose对Jetson优化更好
-- RTMPose是开源的，可定制
+Reasons:
+- MediaPipe only supports CPU (slow)
+- RTMPose supports GPU (4x faster)
+- RTMPose has higher accuracy
+- RTMPose better optimized for Jetson
+- RTMPose is open source, customizable
 
 ---
 
-**Q2: RTMPose-s FP16 vs RTMPose-tiny INT8有什么区别？**
+**Q2: What's the difference between RTMPose-s FP16 vs RTMPose-tiny INT8?**
 
-| 对比项 | RTMPose-s FP16 | RTMPose-tiny INT8 |
+| Comparison | RTMPose-s FP16 | RTMPose-tiny INT8 |
 |-------|----------------|-------------------|
-| **速度** | 12ms | **8ms** (更快) |
-| **精度** | **AP 68.5%** | AP 65% (低3%) |
-| **内存** | 9MB | **2MB** (更小) |
-| **功耗** | 中 (15W) | **极低** (7W) |
-| **部署复杂度** | **简单** (无需校准) | 复杂 (需要校准) |
-| **推荐场景** | **标准部署** | 极致低功耗 |
+| **Speed** | 12ms | **8ms** (faster) |
+| **Accuracy** | **AP 68.5%** | AP 65% (3% lower) |
+| **Memory** | 9MB | **2MB** (smaller) |
+| **Power** | Medium (15W) | **Very low** (7W) |
+| **Deployment Complexity** | **Simple** (no calibration) | Complex (needs calibration) |
+| **Recommended Scenario** | **Standard deployment** | Ultimate low power |
 
-**推荐**: **RTMPose-s FP16** - 精度、速度、部署难度的最佳平衡！
+**Recommendation**: **RTMPose-s FP16** - Best balance of accuracy, speed, and deployment difficulty!
 
 ---
 
-### 最终建议
+### Final Recommendations
 
-**标准部署方案**:
+**Standard Deployment Solution**:
 ```
 YOLOv8s + RTMPose-s FP16 + TensorRT
 → 30-40 FPS @ 15W
-→ 精度: AP 68.5%
-→ 部署: 简单
-→ 推荐指数: ⭐⭐⭐⭐⭐
+→ Accuracy: AP 68.5%
+→ Deployment: Simple
+→ Rating: ⭐⭐⭐⭐⭐
 ```
 
-**极致性能方案**（可选）:
+**Ultimate Performance Solution** (optional):
 ```
 YOLOv8n + RTMPose-tiny INT8
 → 60+ FPS @ 7W
-→ 精度: AP 65%
-→ 部署: 需要校准
-→ 推荐指数: ⭐⭐⭐⭐ (特殊场景)
+→ Accuracy: AP 65%
+→ Deployment: Requires calibration
+→ Rating: ⭐⭐⭐⭐ (special scenarios)
 ```
 
-**选择建议**:
-- 大多数情况：用 **RTMPose-s FP16**
-- 电池供电/极低功耗：用 **RTMPose-tiny INT8**
-- 高精度需求：用 **RTMPose-m FP16**
+**Selection Guide**:
+- Most cases: Use **RTMPose-s FP16**
+- Battery powered/ultra-low power: Use **RTMPose-tiny INT8**
+- High accuracy requirements: Use **RTMPose-m FP16**
 
-希望这个详细对比帮你做出决策！ 🎯
+Hope this detailed comparison helps you make the right decision! 🎯

@@ -1,16 +1,16 @@
-# 本地部署指南
+# Local Deployment Guide
 
-## 📋 前置要求
+## 📋 Prerequisites
 
 - Python 3.8+
-- 摄像头（USB或内置）
-- （可选）NVIDIA GPU + CUDA 11.0+
+- Camera (USB or built-in)
+- (Optional) NVIDIA GPU + CUDA 11.0+
 
 ---
 
-## 🚀 方案一：虚拟环境（推荐新手）
+## 🚀 Option 1: Virtual Environment (Recommended for Beginners)
 
-### 1. 克隆项目
+### 1. Clone Project
 
 ```bash
 git clone https://github.com/L1TangDingZhen/Camera.git
@@ -18,85 +18,85 @@ cd Camera
 git checkout claude/three-stage-deployment-roadmap-011CUrFSWFN5rH8EACYAZGjD
 ```
 
-### 2. 创建虚拟环境
+### 2. Create Virtual Environment
 
 ```bash
-# 创建
+# Create
 python3 -m venv venv
 
-# 激活（Linux/Mac）
+# Activate (Linux/Mac)
 source venv/bin/activate
 
-# 激活（Windows）
+# Activate (Windows)
 venv\Scripts\activate
 
-# 看到 (venv) 前缀表示成功
+# Seeing (venv) prefix indicates success
 ```
 
-### 3. 安装依赖
+### 3. Install Dependencies
 
 ```bash
-# 方法A: 一键安装（可能失败）
+# Method A: One-click install (may fail)
 pip install -r requirements.txt
 
-# 方法B: 分步安装（更稳定）
+# Method B: Step-by-step install (more stable)
 pip install --upgrade pip
 pip install numpy opencv-python pyyaml
-pip install torch torchvision  # CPU版本，自动选择
+pip install torch torchvision  # CPU version, auto-selected
 pip install ultralytics
 pip install mediapipe
 pip install pandas scipy matplotlib psutil tqdm loguru
 pip install flask flask-cors
 ```
 
-**常见问题：**
+**Common Issues:**
 
-- **torch安装慢？** 使用清华镜像：
+- **Slow torch installation?** Use Tsinghua mirror:
   ```bash
   pip install torch torchvision -i https://pypi.tuna.tsinghua.edu.cn/simple
   ```
 
-- **有NVIDIA GPU？** 安装CUDA版本：
+- **Have NVIDIA GPU?** Install CUDA version:
   ```bash
   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
   ```
 
-### 4. 测试安装
+### 4. Test Installation
 
 ```bash
-# 快速测试（不需要摄像头）
+# Quick test (no camera needed)
 python test_quick.py
 
-# 看到 "所有组件测试通过" 表示成功
+# Seeing "All component tests passed" indicates success
 ```
 
-### 5. 标定ROI区域
+### 5. Calibrate ROI Area
 
 ```bash
-# 连接摄像头后运行
+# Run after connecting camera
 python scripts/calibrate_roi.py --device pc
 
-# 操作：
-# - 鼠标点击标记区域顶点
-# - 按 'c' 完成当前区域
-# - 按 's' 保存配置
-# - 按 'q' 退出
+# Operations:
+# - Click mouse to mark area vertices
+# - Press 'c' to complete current area
+# - Press 's' to save configuration
+# - Press 'q' to exit
 ```
 
-### 6. 正式运行
+### 6. Official Run
 
 ```bash
-# PC开发模式（GPU）
+# PC development mode (GPU)
 python main.py --device pc
 
-# X390验证模式（CPU）
+# X390 verification mode (CPU)
 python main.py --device x390
 
-# 不显示窗口（后台运行）
+# No window display (background run)
 python main.py --device pc --no-vis
 ```
 
-### 7. 退出环境
+### 7. Exit Environment
 
 ```bash
 deactivate
@@ -104,36 +104,36 @@ deactivate
 
 ---
 
-## 🐳 方案二：Docker（完全隔离）
+## 🐳 Option 2: Docker (Complete Isolation)
 
-### 1. 安装Docker
+### 1. Install Docker
 
 ```bash
 # Ubuntu/Debian
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER  # 添加用户到docker组
-# 注销重新登录
+sudo usermod -aG docker $USER  # Add user to docker group
+# Logout and log back in
 
-# Mac: 下载 Docker Desktop
-# Windows: 下载 Docker Desktop
+# Mac: Download Docker Desktop
+# Windows: Download Docker Desktop
 ```
 
-### 2. 构建镜像
+### 2. Build Image
 
 ```bash
 cd Camera
 
-# 构建
+# Build
 docker build -t life-tracker .
 
-# 或使用docker-compose
+# Or use docker-compose
 docker-compose build
 ```
 
-### 3. 运行容器
+### 3. Run Container
 
 ```bash
-# 方式1: docker命令
+# Method 1: docker command
 docker run -it --rm \
   --device=/dev/video0 \
   -v $(pwd)/data:/app/data \
@@ -141,13 +141,13 @@ docker run -it --rm \
   -v $(pwd)/config:/app/config \
   life-tracker
 
-# 方式2: docker-compose（推荐）
-docker-compose up -d  # 后台运行
-docker-compose logs -f  # 查看日志
-docker-compose down  # 停止
+# Method 2: docker-compose (recommended)
+docker-compose up -d  # Run in background
+docker-compose logs -f  # View logs
+docker-compose down  # Stop
 ```
 
-### 4. 进入容器调试
+### 4. Enter Container for Debugging
 
 ```bash
 docker exec -it life-tracker bash
@@ -155,30 +155,30 @@ docker exec -it life-tracker bash
 
 ---
 
-## 🔧 方案三：Conda环境（推荐科研人员）
+## 🔧 Option 3: Conda Environment (Recommended for Researchers)
 
-### 1. 安装Conda
+### 1. Install Conda
 
 ```bash
-# 下载 Miniconda
+# Download Miniconda
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 
-### 2. 创建环境
+### 2. Create Environment
 
 ```bash
 cd Camera
 
-# 创建环境
+# Create environment
 conda create -n life-tracker python=3.10 -y
 conda activate life-tracker
 
-# 安装依赖
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. 运行
+### 3. Run
 
 ```bash
 conda activate life-tracker
@@ -186,7 +186,7 @@ python test_quick.py
 python main.py --device pc
 ```
 
-### 4. 退出
+### 4. Exit
 
 ```bash
 conda deactivate
@@ -194,38 +194,38 @@ conda deactivate
 
 ---
 
-## 📦 无摄像头测试方案
+## 📦 Testing Without Camera
 
-### 使用视频文件
+### Using Video File
 
 ```bash
-# 1. 准备测试视频
-# 下载或录制一段包含人的视频，放到 data/test_video.mp4
+# 1. Prepare test video
+# Download or record a video with people, place in data/test_video.mp4
 
-# 2. 修改配置
-# 编辑 config/config_pc.yaml
+# 2. Modify configuration
+# Edit config/config_pc.yaml
 camera:
-  source: "data/test_video.mp4"  # 改为视频路径
+  source: "data/test_video.mp4"  # Change to video path
   fps: 30
   resolution: [640, 480]
 
-# 3. 运行
+# 3. Run
 python main.py --device pc
 ```
 
-### 使用测试脚本
+### Using Test Script
 
 ```bash
-# 不需要摄像头的测试
+# Test without camera
 python test_quick.py
 
-# 性能测试
+# Performance test
 python test_quick.py --perf
 ```
 
 ---
 
-## 🐛 常见问题排查
+## 🐛 Common Issue Troubleshooting
 
 ### 1. ImportError: No module named 'cv2'
 
@@ -239,100 +239,100 @@ pip install opencv-python
 pip install ultralytics
 ```
 
-### 3. 摄像头无法打开
+### 3. Camera Cannot Open
 
 ```bash
-# 检查设备
+# Check devices
 ls /dev/video*
 
-# 尝试不同ID
-# 修改 config/config_pc.yaml 中的 camera.source 为 1 或 2
+# Try different IDs
+# Modify camera.source in config/config_pc.yaml to 1 or 2
 ```
 
 ### 4. CUDA out of memory
 
 ```yaml
-# 修改 config/config_pc.yaml
+# Modify config/config_pc.yaml
 models:
   person:
-    device: cpu  # 改为CPU
+    device: cpu  # Change to CPU
   pose:
-    backend: mediapipe  # 使用CPU友好的后端
+    backend: mediapipe  # Use CPU-friendly backend
     device: cpu
 ```
 
-### 5. YOLOv8模型下载失败
+### 5. YOLOv8 Model Download Failed
 
 ```bash
-# 手动下载
+# Manual download
 wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt
 mv yolov8s.pt models/
 ```
 
-### 6. MediaPipe初始化失败
+### 6. MediaPipe Initialization Failed
 
 ```bash
-# 卸载重装
+# Uninstall and reinstall
 pip uninstall mediapipe -y
 pip install mediapipe --no-cache-dir
 ```
 
 ---
 
-## 📊 验证运行成功
+## 📊 Verify Successful Run
 
-运行后应该看到：
+After running, you should see:
 
 ```
 ============================================================
   Life Tracker - PC Development
-  设备: cuda:0
+  Device: cuda:0
 ============================================================
 
-[初始化] 加载人体检测器...
-[PersonDetector] 加载模型: yolov8s.pt
-[PersonDetector] 设备: cuda:0
-[PersonDetector] 模型加载成功
+[Initialization] Loading person detector...
+[PersonDetector] Loading model: yolov8s.pt
+[PersonDetector] Device: cuda:0
+[PersonDetector] Model loaded successfully
 
-[初始化] 加载姿态估计器...
-[MediaPipePose] 初始化完成，complexity=1
+[Initialization] Loading pose estimator...
+[MediaPipePose] Initialization complete, complexity=1
 
-[初始化] 加载ROI管理器...
-[ROIManager] 加载了 0 个区域: []
+[Initialization] Loading ROI manager...
+[ROIManager] Loaded 0 areas: []
 
-[初始化] 创建状态机...
-[BehaviorStateMachine] 初始化完成
+[Initialization] Creating state machine...
+[BehaviorStateMachine] Initialization complete
 
-[初始化] 创建事件记录器...
-[EventLogger] 初始化完成
+[Initialization] Creating event logger...
+[EventLogger] Initialization complete
 
-[初始化] 打开摄像头...
+[Initialization] Opening camera...
 
-[初始化] 所有组件加载完成!
+[Initialization] All components loaded!
 
-[运行] 开始监测...
+[Running] Starting monitoring...
 ```
 
-窗口显示：
-- 实时画面
-- FPS显示
-- 当前状态
-- 区域信息
+Window display:
+- Real-time footage
+- FPS display
+- Current state
+- Area information
 
 ---
 
-## 🎯 下一步
+## 🎯 Next Steps
 
-1. **标定ROI区域**: `python scripts/calibrate_roi.py --device pc`
-2. **模型对比测试**: `python scripts/compare_models.py --device pc`
-3. **查看Web界面**: （待实现）访问 http://localhost:5000
-4. **迁移到X390**: 按照 README.md 中的阶段2步骤
+1. **Calibrate ROI area**: `python scripts/calibrate_roi.py --device pc`
+2. **Model comparison test**: `python scripts/compare_models.py --device pc`
+3. **View Web interface**: (To be implemented) Visit http://localhost:5000
+4. **Migrate to X390**: Follow Phase 2 steps in README.md
 
 ---
 
-## 💡 性能参考
+## 💡 Performance Reference
 
-| 环境 | 配置 | FPS | 说明 |
+| Environment | Configuration | FPS | Notes |
 |------|------|-----|------|
 | PC GPU | i5-12 + RTX 4070 | 280+ | YOLOv8s + RTMPose |
 | PC CPU | i5-12 | 6-8 | YOLOv8s + MediaPipe |
@@ -341,11 +341,11 @@ pip install mediapipe --no-cache-dir
 
 ---
 
-## 📞 获取帮助
+## 📞 Get Help
 
-遇到问题？
+Encountering issues?
 
-1. 查看 `README.md` 的常见问题章节
-2. 运行 `python test_quick.py` 定位问题
-3. 查看 `logs/app.log` 日志文件
-4. 提交 GitHub Issue
+1. Check FAQ section in `README.md`
+2. Run `python test_quick.py` to locate issues
+3. Check `logs/app.log` log file
+4. Submit GitHub Issue

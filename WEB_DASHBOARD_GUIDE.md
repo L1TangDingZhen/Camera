@@ -1,377 +1,377 @@
-# Web Dashboard 使用指南
+# Web Dashboard User Guide
 
-## 🌐 功能概览
+## 🌐 Feature Overview
 
-Web Dashboard 是久坐提醒系统的**数据可视化界面**，提供以下功能：
+The Web Dashboard is the **data visualization interface** for the prolonged sitting reminder system, providing the following features:
 
-1. **实时数据监控** - 当前活动状态、时长
-2. **统计图表** - 今日活动分布、本周趋势
-3. **智能预测** - 预测下次坐姿时长、最佳提醒时间
-4. **异常检测** - 识别异常久坐行为
-5. **久坐警告** - 实时警告提示
+1. **Real-time Data Monitoring** - Current activity status, duration
+2. **Statistical Charts** - Today's activity distribution, weekly trends
+3. **Smart Prediction** - Predict next sitting duration, optimal reminder time
+4. **Anomaly Detection** - Identify abnormal prolonged sitting behavior
+5. **Prolonged Sitting Warning** - Real-time warning alerts
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 启动Web服务器
+### 1. Start Web Server
 
 ```bash
-# 基本启动（默认 http://127.0.0.1:5000）
+# Basic startup (default http://127.0.0.1:5000)
 python web_dashboard.py
 
-# 指定端口
+# Specify port
 python web_dashboard.py --port 8080
 
-# 允许外部访问（局域网访问）
+# Allow external access (LAN access)
 python web_dashboard.py --host 0.0.0.0 --port 5000
 
-# 启用调试模式
+# Enable debug mode
 python web_dashboard.py --debug
 ```
 
-### 2. 访问仪表盘
+### 2. Access Dashboard
 
-打开浏览器，访问：
+Open browser and visit:
 ```
 http://127.0.0.1:5000
 ```
 
-如果在局域网其他设备访问：
+For accessing from other devices on LAN:
 ```
-http://[你的电脑IP]:5000
+http://[your_computer_IP]:5000
 ```
 
-### 3. 查看实时数据
+### 3. View Real-time Data
 
-仪表盘会**每30秒自动刷新**，无需手动操作。
+The dashboard will **auto-refresh every 30 seconds**, no manual operation needed.
 
 ---
 
-## 📊 功能详解
+## 📊 Feature Details
 
-### 1. 当前状态卡片
+### 1. Current Status Card
 
-显示当前活动信息：
-- **当前状态**: 坐姿 🪑 / 站立 🧍 / 躺卧 🛏️
-- **持续时长**: 当前状态已持续多久
-- **所在区域**: 检测到的区域（bed/chair等）
+Displays current activity information:
+- **Current Status**: Sitting 🪑 / Standing 🧍 / Lying 🛏️
+- **Duration**: How long current status has lasted
+- **Zone**: Detected zone (bed/chair, etc.)
 
-**示例**:
+**Example**:
 ```
-当前状态: 🪑 坐姿
-持续时长: 15分钟
-所在区域: chair
+Current Status: 🪑 Sitting
+Duration: 15 minutes
+Zone: chair
 ```
 
 ---
 
-### 2. 久坐警告横幅
+### 2. Prolonged Sitting Warning Banner
 
-当持续坐姿超过**30分钟**时，顶部会显示红色警告条：
+When continuously sitting exceeds **30 minutes**, a red warning bar will appear at the top:
 
 ```
-⚠️ 久坐警告
-您已持续坐姿35分钟，建议起身活动！
+⚠️ Prolonged Sitting Warning
+You have been sitting for 35 minutes, recommend standing up!
 ```
 
-**特点**:
-- 自动触发（无需手动检查）
-- 显著的红色横幅
-- 震动动画效果
+**Features**:
+- Auto-triggered (no manual checking needed)
+- Prominent red banner
+- Shake animation effect
 
 ---
 
-### 3. 今日统计卡片
+### 3. Today's Statistics Cards
 
-四个统计卡片显示今日数据：
+Four statistic cards showing today's data:
 
-| 图标 | 指标 | 说明 |
+| Icon | Metric | Description |
 |------|------|------|
-| 🪑 | 坐姿时长 | 今日累计坐姿时间 |
-| 🧍 | 站立时长 | 今日累计站立时间 |
-| 🛏️ | 躺卧时长 | 今日累计躺卧时间 |
-| 📊 | 会话次数 | 今日总活动会话数 |
+| 🪑 | Sitting Duration | Today's cumulative sitting time |
+| 🧍 | Standing Duration | Today's cumulative standing time |
+| 🛏️ | Lying Duration | Today's cumulative lying time |
+| 📊 | Session Count | Today's total activity sessions |
 
 ---
 
-### 4. 坐姿详细统计
+### 4. Detailed Sitting Statistics
 
-更详细的坐姿分析：
-- **总时长**: 今日坐姿总时间（小时）
-- **会话次数**: 今日坐了几次
-- **平均时长**: 每次坐姿的平均时长
-- **最长一次**: 最长的一次坐姿时长
+More detailed sitting analysis:
+- **Total Duration**: Today's total sitting time (hours)
+- **Session Count**: How many times sat today
+- **Average Duration**: Average duration per sitting session
+- **Longest Session**: Longest sitting session duration
 
-**用途**: 了解自己的坐姿习惯
-
----
-
-### 5. 今日活动分布（饼图）
-
-可视化今日时间分配：
-- 🟥 红色 = 坐姿
-- 🟦 蓝色 = 站立
-- 🟨 黄色 = 躺卧
-
-**交互**:
-- 鼠标悬停查看具体数值
-- 自动计算百分比
+**Purpose**: Understand your sitting habits
 
 ---
 
-### 6. 本周活动趋势（折线图）
+### 5. Today's Activity Distribution (Pie Chart)
 
-显示过去7天的活动趋势：
-- 📈 红线 = 坐姿时长
-- 📈 蓝线 = 站立时长
-- 📈 黄线 = 躺卧时长
+Visualize today's time allocation:
+- 🟥 Red = Sitting
+- 🟦 Blue = Standing
+- 🟨 Yellow = Lying
 
-**用途**:
-- 发现每周规律（如周末坐姿是否更长）
-- 跟踪改善进度
-
----
-
-### 7. 智能预测 🔮
-
-基于历史数据的**AI预测功能**：
-
-#### 7.1 预测下次坐姿时长
-
-```
-🎯 预测下次坐姿时长
-45分钟
-置信度: 75%
-建议: 预计您将久坐，建议设置25分钟提醒
-```
-
-**算法**:
-1. 分析最近30天的坐姿记录
-2. 根据当前时段（±2小时）计算平均值
-3. 使用中位数平滑异常值
-4. 给出置信度评分
-
-**冷启动**: 至少需要3次坐姿记录才能预测
-
-#### 7.2 建议提醒间隔
-
-```
-⏰ 建议提醒间隔
-25分钟
-您的坐姿时长较长，建议频繁提醒。高风险时段: 9-12时、14-17时
-```
-
-**算法**:
-1. 分析过去14天的坐姿模式
-2. 找出容易久坐的时段
-3. 根据平均坐姿时长推荐提醒间隔：
-   - 平均 >45分钟 → 25分钟提醒（频繁）
-   - 平均 30-45分钟 → 30分钟提醒（标准）
-   - 平均 <30分钟 → 40分钟提醒（宽松）
+**Interaction**:
+- Hover to view specific values
+- Auto-calculate percentages
 
 ---
 
-### 8. 今日异常检测 🔍
+### 6. Weekly Activity Trend (Line Chart)
 
-智能检测今日行为是否异常：
+Shows activity trends over the past 7 days:
+- 📈 Red line = Sitting duration
+- 📈 Blue line = Standing duration
+- 📈 Yellow line = Lying duration
 
-#### 示例1: 正常
-```
-✅ 今日坐姿时长正常
-
-今日坐姿: 2.5小时
-历史平均: 2.8小时
-偏差: -10.7%
-```
-
-#### 示例2: 中度异常
-```
-🟡 ⚠️ 今日坐姿时长显著高于平均水平（+35%），请注意多活动
-
-今日坐姿: 4.2小时
-历史平均: 3.1小时
-偏差: +35.5%
-```
-
-#### 示例3: 高度异常
-```
-🔴 ⚠️ 今日坐姿时长显著高于平均水平（+67%），请注意多活动
-
-今日坐姿: 6.8小时
-历史平均: 4.1小时
-偏差: +65.9%
-```
-
-**判断标准**:
-- 偏差 <20% → 正常 (绿色)
-- 偏差 20-50% → 中度异常 (黄色)
-- 偏差 >50% → 高度异常 (红色)
+**Purpose**:
+- Discover weekly patterns (e.g., whether weekend sitting is longer)
+- Track improvement progress
 
 ---
 
-## 🔌 API接口
+### 7. Smart Prediction 🔮
 
-Web Dashboard 提供RESTful API，可以集成到其他应用：
+**AI prediction features** based on historical data:
 
-### 基础统计
+#### 7.1 Predict Next Sitting Duration
+
+```
+🎯 Predicted Next Sitting Duration
+45 minutes
+Confidence: 75%
+Suggestion: Expected prolonged sitting, recommend setting 25-minute reminder
+```
+
+**Algorithm**:
+1. Analyze sitting records from the past 30 days
+2. Calculate average based on current time period (±2 hours)
+3. Use median to smooth outliers
+4. Provide confidence score
+
+**Cold Start**: Requires at least 3 sitting records for prediction
+
+#### 7.2 Suggested Reminder Interval
+
+```
+⏰ Suggested Reminder Interval
+25 minutes
+Your sitting duration is long, recommend frequent reminders. High-risk periods: 9-12AM, 2-5PM
+```
+
+**Algorithm**:
+1. Analyze sitting patterns from past 14 days
+2. Identify periods prone to prolonged sitting
+3. Recommend reminder interval based on average sitting duration:
+   - Average >45 minutes → 25-minute reminder (frequent)
+   - Average 30-45 minutes → 30-minute reminder (standard)
+   - Average <30 minutes → 40-minute reminder (relaxed)
+
+---
+
+### 8. Today's Anomaly Detection 🔍
+
+Intelligently detect if today's behavior is abnormal:
+
+#### Example 1: Normal
+```
+✅ Today's sitting duration is normal
+
+Today's sitting: 2.5 hours
+Historical average: 2.8 hours
+Deviation: -10.7%
+```
+
+#### Example 2: Moderate Anomaly
+```
+🟡 ⚠️ Today's sitting duration significantly higher than average (+35%), please pay attention to more movement
+
+Today's sitting: 4.2 hours
+Historical average: 3.1 hours
+Deviation: +35.5%
+```
+
+#### Example 3: High Anomaly
+```
+🔴 ⚠️ Today's sitting duration significantly higher than average (+67%), please pay attention to more movement
+
+Today's sitting: 6.8 hours
+Historical average: 4.1 hours
+Deviation: +65.9%
+```
+
+**Judgment Criteria**:
+- Deviation <20% → Normal (green)
+- Deviation 20-50% → Moderate anomaly (yellow)
+- Deviation >50% → High anomaly (red)
+
+---
+
+## 🔌 API Interface
+
+Web Dashboard provides RESTful API that can be integrated into other applications:
+
+### Basic Statistics
 
 ```bash
-# 今日统计
+# Today's statistics
 curl http://127.0.0.1:5000/api/stats/today
 
-# 坐姿统计
+# Sitting statistics
 curl http://127.0.0.1:5000/api/stats/sitting
 
-# 本周统计
+# Weekly statistics
 curl http://127.0.0.1:5000/api/stats/weekly
 
-# 当前会话
+# Current session
 curl http://127.0.0.1:5000/api/stats/current
 
-# 历史记录（最近7天）
+# Historical records (last 7 days)
 curl http://127.0.0.1:5000/api/stats/history?days=7
 ```
 
-### 预测接口
+### Prediction Interface
 
 ```bash
-# 预测下次坐姿时长
+# Predict next sitting duration
 curl http://127.0.0.1:5000/api/prediction/next_sitting
 
-# 预测最佳提醒时间
+# Predict optimal reminder time
 curl http://127.0.0.1:5000/api/prediction/optimal_reminder
 
-# 异常检测
+# Anomaly detection
 curl http://127.0.0.1:5000/api/prediction/anomaly
 ```
 
-### 警告接口
+### Alert Interface
 
 ```bash
-# 检查久坐警告（默认30分钟）
+# Check prolonged sitting warning (default 30 minutes)
 curl http://127.0.0.1:5000/api/alert/prolonged_sitting
 
-# 自定义阈值（25分钟）
+# Custom threshold (25 minutes)
 curl http://127.0.0.1:5000/api/alert/prolonged_sitting?threshold=25
 ```
 
 ---
 
-## 🎨 响应式设计
+## 🎨 Responsive Design
 
-Web Dashboard 支持多种设备：
+Web Dashboard supports multiple devices:
 
-- **桌面浏览器** (推荐): 完整功能，最佳体验
-- **平板电脑**: 自适应布局
-- **手机**: 单列显示，保留所有功能
+- **Desktop Browser** (recommended): Full features, best experience
+- **Tablet**: Adaptive layout
+- **Mobile**: Single column display, retains all features
 
-**推荐分辨率**: 1280x720 及以上
+**Recommended Resolution**: 1280x720 and above
 
 ---
 
-## ⚙️ 配置选项
+## ⚙️ Configuration Options
 
-### 修改自动刷新间隔
+### Modify Auto-refresh Interval
 
-编辑 `static/js/dashboard.js`:
+Edit `static/js/dashboard.js`:
 
 ```javascript
-// 修改刷新间隔（默认30秒）
-refreshInterval = setInterval(refreshAllData, 30000);  // 改为60000 = 1分钟
+// Modify refresh interval (default 30 seconds)
+refreshInterval = setInterval(refreshAllData, 30000);  // Change to 60000 = 1 minute
 ```
 
-### 修改久坐警告阈值
+### Modify Prolonged Sitting Warning Threshold
 
-编辑 `web_dashboard.py`:
+Edit `web_dashboard.py`:
 
 ```python
-# 修改默认阈值（默认30分钟）
+# Modify default threshold (default 30 minutes)
 def check_prolonged_sitting():
-    threshold = int(request.args.get('threshold', 30))  # 改为25
+    threshold = int(request.args.get('threshold', 30))  # Change to 25
 ```
 
-### 修改图表颜色
+### Modify Chart Colors
 
-编辑 `static/css/style.css`，找到对应的颜色代码并修改。
+Edit `static/css/style.css`, find corresponding color codes and modify.
 
 ---
 
-## 🐛 常见问题
+## 🐛 Common Issues
 
-### 1. 页面显示 "数据库文件不存在"
+### 1. Page shows "Database file does not exist"
 
-**原因**: 还没有运行 `main.py` 创建数据库
+**Reason**: Haven't run `main.py` to create database yet
 
-**解决**:
+**Solution**:
 ```bash
-# 先运行主程序创建数据库
+# First run main program to create database
 python main.py --config config/config_gpu.yaml
 
-# 等待几分钟让其记录数据
+# Wait a few minutes for it to record data
 
-# 再启动Web Dashboard
+# Then start Web Dashboard
 python web_dashboard.py
 ```
 
-### 2. 所有统计都显示0
+### 2. All statistics show 0
 
-**原因**: 数据库中还没有数据
+**Reason**: No data in database yet
 
-**解决**:
-1. 运行 `main.py` 让系统记录你的活动
-2. 至少坐/站/躺几次，产生一些数据
-3. 刷新Web Dashboard
+**Solution**:
+1. Run `main.py` to let system record your activities
+2. Sit/stand/lie a few times to generate some data
+3. Refresh Web Dashboard
 
-### 3. 预测显示 "累积更多数据后将提供预测"
+### 3. Prediction shows "Predictions will be available after accumulating more data"
 
-**原因**: 历史数据不足（需要至少3次坐姿记录）
+**Reason**: Insufficient historical data (requires at least 3 sitting records)
 
-**解决**:
-- 继续使用系统，积累更多数据
-- 建议至少使用3-7天后再查看预测
+**Solution**:
+- Continue using the system to accumulate more data
+- Recommend checking prediction feature after at least 3-7 days of use
 
-### 4. 图表不显示
+### 4. Charts not displaying
 
-**检查**:
-1. 浏览器控制台是否有错误（F12）
-2. 确认Chart.js加载成功（需要网络连接）
-3. 清除浏览器缓存重试
+**Check**:
+1. Whether browser console has errors (F12)
+2. Confirm Chart.js loaded successfully (requires network connection)
+3. Clear browser cache and retry
 
-### 5. 局域网无法访问
+### 5. Cannot access from LAN
 
-**检查**:
-1. 确认使用 `--host 0.0.0.0` 参数启动
-2. 检查防火墙设置（开放5000端口）
-3. 确认IP地址正确
-
----
-
-## 📱 移动端访问
-
-### 添加到主屏幕（iOS/Android）
-
-1. 浏览器打开 `http://[IP]:5000`
-2. 点击"添加到主屏幕"
-3. 像原生App一样使用
-
-### 推荐设置
-
-- **iOS Safari**: 添加到主屏幕
-- **Android Chrome**: 安装PWA（未来功能）
+**Check**:
+1. Confirm started with `--host 0.0.0.0` parameter
+2. Check firewall settings (open port 5000)
+3. Confirm IP address is correct
 
 ---
 
-## 🔐 安全注意事项
+## 📱 Mobile Access
 
-⚠️ **重要**: Web Dashboard 默认没有认证机制
+### Add to Home Screen (iOS/Android)
 
-**建议**:
-1. 仅在本地或可信局域网使用
-2. 不要暴露到公网
-3. 如需公网访问，建议配置反向代理+HTTPS
+1. Open `http://[IP]:5000` in browser
+2. Click "Add to Home Screen"
+3. Use like a native app
 
-**进阶配置** (使用Nginx反向代理):
+### Recommended Settings
+
+- **iOS Safari**: Add to home screen
+- **Android Chrome**: Install PWA (future feature)
+
+---
+
+## 🔐 Security Notes
+
+⚠️ **Important**: Web Dashboard has no authentication mechanism by default
+
+**Recommendations**:
+1. Use only on local or trusted LAN
+2. Do not expose to public internet
+3. For public access, recommend configuring reverse proxy + HTTPS
+
+**Advanced Configuration** (using Nginx reverse proxy):
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:5000;
@@ -382,67 +382,67 @@ location / {
 
 ---
 
-## 🚀 性能优化
+## 🚀 Performance Optimization
 
-### 服务器端
+### Server Side
 
 ```bash
-# 使用生产服务器（Gunicorn）
+# Use production server (Gunicorn)
 pip install gunicorn
 
 gunicorn -w 4 -b 0.0.0.0:5000 web_dashboard:app
 ```
 
-### 客户端
+### Client Side
 
-- 图表使用Canvas渲染（高性能）
-- 自动缓存今日统计
-- 异步数据加载
-
----
-
-## 📊 数据隐私
-
-所有数据均存储在**本地SQLite数据库** (`data/database.db`)：
-- ✅ 不上传任何数据到云端
-- ✅ 完全离线工作
-- ✅ 你拥有所有数据
+- Charts use Canvas rendering (high performance)
+- Auto-cache today's statistics
+- Asynchronous data loading
 
 ---
 
-## 🎯 下一步计划
+## 📊 Data Privacy
 
-- [ ] 周报/月报自动生成（PDF/邮件）
-- [ ] 导出数据到Excel
-- [ ] 自定义提醒规则
-- [ ] 多用户支持
-- [ ] 桌面通知集成
-- [ ] PWA支持（离线使用）
-- [ ] 数据对比（本周vs上周）
+All data stored in **local SQLite database** (`data/database.db`):
+- ✅ No data uploaded to cloud
+- ✅ Works completely offline
+- ✅ You own all data
 
 ---
 
-## 📞 技术支持
+## 🎯 Next Steps
 
-遇到问题？
-
-1. 检查本文档的"常见问题"章节
-2. 查看浏览器控制台错误信息
-3. 查看服务器终端输出
-4. 运行 `python query_stats.py` 检查数据是否正常
+- [ ] Weekly/monthly report auto-generation (PDF/email)
+- [ ] Export data to Excel
+- [ ] Custom reminder rules
+- [ ] Multi-user support
+- [ ] Desktop notification integration
+- [ ] PWA support (offline use)
+- [ ] Data comparison (this week vs last week)
 
 ---
 
-## 总结
+## 📞 Technical Support
 
-Web Dashboard 提供了**完整的数据可视化和预测功能**：
+Encountering issues?
 
-✅ **实时监控** - 当前状态、时长、区域
-✅ **统计分析** - 今日/本周数据、图表展示
-✅ **智能预测** - 预测下次坐姿时长、最佳提醒时间
-✅ **异常检测** - 自动识别异常行为
-✅ **久坐警告** - 超过30分钟自动提醒
-✅ **API接口** - 可集成到其他应用
-✅ **响应式设计** - 支持手机/平板/桌面
+1. Check "Common Issues" section in this document
+2. View browser console error messages
+3. View server terminal output
+4. Run `python query_stats.py` to check if data is normal
 
-**现在就开始使用吧！** 🎉
+---
+
+## Summary
+
+Web Dashboard provides **complete data visualization and prediction features**:
+
+✅ **Real-time Monitoring** - Current status, duration, zone
+✅ **Statistical Analysis** - Today/weekly data, chart display
+✅ **Smart Prediction** - Predict next sitting duration, optimal reminder time
+✅ **Anomaly Detection** - Automatically identify abnormal behavior
+✅ **Prolonged Sitting Warning** - Auto-reminder after exceeding 30 minutes
+✅ **API Interface** - Can integrate into other applications
+✅ **Responsive Design** - Supports mobile/tablet/desktop
+
+**Start using it now!** 🎉

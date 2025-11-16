@@ -1,118 +1,118 @@
-# 如何运行久坐提醒系统
+# How to Run the Prolonged Sitting Reminder System
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
-# 安装Python依赖
+# Install Python dependencies
 pip install -r requirements.txt
 ```
 
-**注意事项：**
-- Python版本需要 **3.8+**
-- Windows下某些GPU包（mmcv-full/mmpose）可能安装失败，不影响CPU运行
-- 如果安装ultralytics失败，可以单独安装: `pip install ultralytics`
+**Notes:**
+- Python version requires **3.8+**
+- Some GPU packages (mmcv-full/mmpose) may fail to install on Windows, which doesn't affect CPU execution
+- If ultralytics installation fails, install separately: `pip install ultralytics`
 
-### 2. 准备摄像头
+### 2. Prepare Camera
 
-确保你的电脑有可用的摄像头：
-- **笔记本内置摄像头**: 通常是 `/dev/video0` (Linux) 或 `0` (Windows)
-- **外接USB摄像头**: 可能是 `/dev/video1` 或 `1`
+Ensure your computer has an available camera:
+- **Laptop built-in camera**: Usually `/dev/video0` (Linux) or `0` (Windows)
+- **External USB camera**: May be `/dev/video1` or `1`
 
-### 3. 运行应用
+### 3. Run the Application
 
 ```bash
-# 方式1: 使用GPU配置（如果有CUDA GPU）
+# Method 1: Use GPU configuration (if you have a CUDA GPU)
 python main.py --config config/config_gpu.yaml
 
-# 方式2: 使用CPU配置（通用，但较慢）
+# Method 2: Use CPU configuration (universal, but slower)
 python main.py --config config/config_cpu.yaml
 
-# 方式3: 启用调试模式（显示骨骼点、角度等）
+# Method 3: Enable debug mode (show skeleton points, angles, etc.)
 python main.py --config config/config_gpu.yaml --debug
 
-# 方式4: 不显示可视化窗口（仅后台运行）
+# Method 4: No visualization window (run in background only)
 python main.py --config config/config_gpu.yaml --no-vis
 ```
 
-### 4. 查看SessionTracker效果
+### 4. Check SessionTracker Effect
 
-运行后，你会看到：
+After running, you will see:
 
-**启动信息：**
+**Startup Information:**
 ```
-[初始化] 加载配置...
-[初始化] 加载姿态估计器...
-[初始化] 加载ROI管理器...
-[初始化] 创建事件记录器...
-[初始化] 创建状态机...
-[BehaviorStateMachine] SessionTracker已启用  ← 看到这行说明SessionTracker已工作
-[初始化] 打开摄像头...
+[Initialization] Loading configuration...
+[Initialization] Loading pose estimator...
+[Initialization] Loading ROI manager...
+[Initialization] Creating event logger...
+[Initialization] Creating state machine...
+[BehaviorStateMachine] SessionTracker enabled  ← Seeing this line means SessionTracker is working
+[Initialization] Opening camera...
 ```
 
-**运行时：**
-- 摄像头窗口会显示实时画面
-- 左上角显示当前状态（Sitting/Standing/Lying）
-- SessionTracker在后台自动记录每个状态的持续时间
+**During Runtime:**
+- Camera window will display real-time footage
+- Upper left corner shows current state (Sitting/Standing/Lying)
+- SessionTracker automatically records duration of each state in background
 
-**数据存储位置：**
+**Data Storage Location:**
 ```
-data/database.db  ← SQLite数据库，包含所有会话记录
+data/database.db  ← SQLite database, contains all session records
 ```
 
 ---
 
-## 查看SessionTracker记录的数据
+## View SessionTracker Recorded Data
 
-### 方式1: 使用Python脚本查询
+### Method 1: Use Python Script Query
 
-创建一个简单的查询脚本：
+Create a simple query script:
 
 ```python
 # query_stats.py
 from src.storage.database import Database
 from src.analytics.session_tracker import SessionTracker
 
-# 连接数据库
+# Connect to database
 db = Database('data/database.db')
 tracker = SessionTracker(database=db)
 
-# 查看今日统计
+# View today's statistics
 stats = tracker.get_today_statistics()
-print(f"📊 今日统计 ({stats['date']}):")
-print(f"  坐姿: {stats['sitting_duration']/3600:.2f} 小时")
-print(f"  站立: {stats['standing_duration']/3600:.2f} 小时")
-print(f"  躺卧: {stats['lying_duration']/3600:.2f} 小时")
-print(f"  总会话数: {stats['total_sessions']}")
+print(f"📊 Today's Statistics ({stats['date']}):")
+print(f"  Sitting: {stats['sitting_duration']/3600:.2f} hours")
+print(f"  Standing: {stats['standing_duration']/3600:.2f} hours")
+print(f"  Lying: {stats['lying_duration']/3600:.2f} hours")
+print(f"  Total sessions: {stats['total_sessions']}")
 
-# 查看坐姿详细统计
+# View detailed sitting statistics
 sitting_stats = tracker.get_sitting_statistics()
-print(f"\n💺 坐姿详细统计:")
-print(f"  总时长: {sitting_stats['total_duration_minutes']:.1f} 分钟")
-print(f"  会话次数: {sitting_stats['session_count']}")
-print(f"  平均每次: {sitting_stats['average_session_duration']/60:.1f} 分钟")
-print(f"  最长一次: {sitting_stats['longest_session']/60:.1f} 分钟")
+print(f"\n💺 Detailed Sitting Statistics:")
+print(f"  Total duration: {sitting_stats['total_duration_minutes']:.1f} minutes")
+print(f"  Session count: {sitting_stats['session_count']}")
+print(f"  Average per session: {sitting_stats['average_session_duration']/60:.1f} minutes")
+print(f"  Longest session: {sitting_stats['longest_session']/60:.1f} minutes")
 
-# 检查是否久坐
+# Check for prolonged sitting
 if tracker.check_prolonged_sitting(threshold_minutes=30):
     current_duration = tracker.get_current_duration() / 60
-    print(f"\n⚠️  久坐警告: 已持续坐姿 {current_duration:.0f} 分钟!")
+    print(f"\n⚠️  Prolonged Sitting Warning: Continuous sitting for {current_duration:.0f} minutes!")
 ```
 
-运行：
+Run:
 ```bash
 python query_stats.py
 ```
 
-### 方式2: 直接查询数据库
+### Method 2: Query Database Directly
 
 ```bash
-# 查看最近10条会话记录
+# View last 10 session records
 sqlite3 data/database.db "SELECT datetime(timestamp, 'unixepoch', 'localtime') as time, state, duration/60 as duration_min, zone FROM state_history ORDER BY id DESC LIMIT 10;"
 ```
 
-### 方式3: 使用Python REPL
+### Method 3: Use Python REPL
 
 ```python
 python3
@@ -123,190 +123,190 @@ python3
 >>> db = Database('data/database.db')
 >>> tracker = SessionTracker(database=db)
 >>>
->>> # 查看今日统计
+>>> # View today's statistics
 >>> tracker.get_today_statistics()
 >>>
->>> # 查看本周统计
+>>> # View weekly statistics
 >>> tracker.get_weekly_statistics()
 ```
 
 ---
 
-## 配置文件说明
+## Configuration File Description
 
-### `config/config_gpu.yaml` (推荐)
-- 使用GPU加速
-- YOLOv8人体检测 + MediaPipe姿态估计
-- FPS: ~15-20（足够检测坐/站/躺）
+### `config/config_gpu.yaml` (Recommended)
+- Uses GPU acceleration
+- YOLOv8 person detection + MediaPipe pose estimation
+- FPS: ~15-20 (sufficient for detecting sit/stand/lie)
 
-### `config/config_cpu.yaml` (备用)
-- 纯CPU运行
-- MediaPipe姿态估计
-- FPS: ~10-15（可能较慢）
+### `config/config_cpu.yaml` (Backup)
+- Pure CPU execution
+- MediaPipe pose estimation
+- FPS: ~10-15 (may be slower)
 
-你可以根据需要修改配置：
+You can modify configuration as needed:
 
 ```yaml
 camera:
-  source: 0  # 修改为你的摄像头编号
-  resolution: [1920, 1080]  # 修改为你想要的分辨率
+  source: 0  # Change to your camera number
+  resolution: [1920, 1080]  # Change to your desired resolution
 
 behavior:
   thresholds:
-    min_confidence: 0.5  # 姿态估计置信度阈值
-    standing_hip_knee_angle: 150  # 站立判定角度
+    min_confidence: 0.5  # Pose estimation confidence threshold
+    standing_hip_knee_angle: 150  # Standing determination angle
 
-# SessionTracker配置（将来可以添加）
+# SessionTracker configuration (can be added in the future)
 session_tracking:
-  prolonged_sitting_threshold: 30  # 久坐阈值（分钟）
-  auto_save_interval: 60  # 自动保存间隔（秒）
+  prolonged_sitting_threshold: 30  # Prolonged sitting threshold (minutes)
+  auto_save_interval: 60  # Auto-save interval (seconds)
 ```
 
 ---
 
-## 常见问题
+## Common Issues
 
-### 1. 摄像头打不开
+### 1. Camera Won't Open
 ```
-RuntimeError: 无法打开摄像头: 0
+RuntimeError: Unable to open camera: 0
 ```
 
-**解决方案：**
-- Linux: 检查摄像头设备 `ls /dev/video*`，修改config中的`camera.source`
-- Windows: 尝试修改为 `1` 或 `2`（如果有多个摄像头）
-- 检查摄像头权限
+**Solutions:**
+- Linux: Check camera device `ls /dev/video*`, modify `camera.source` in config
+- Windows: Try changing to `1` or `2` (if multiple cameras)
+- Check camera permissions
 
-### 2. 依赖安装失败
+### 2. Dependency Installation Failed
 
-**mmcv-full/mmpose安装失败（Windows常见）：**
+**mmcv-full/mmpose installation failed (common on Windows):**
 ```bash
-# 这些包只在GPU模式下用到，CPU模式不需要
-# 可以注释掉requirements.txt中的这两行
+# These packages are only used in GPU mode, not needed for CPU mode
+# Can comment out these two lines in requirements.txt
 ```
 
-**PyTorch安装失败：**
+**PyTorch installation failed:**
 ```bash
-# 访问 https://pytorch.org 获取适合你系统的安装命令
-# 例如（CPU版本）:
+# Visit https://pytorch.org for installation command suitable for your system
+# For example (CPU version):
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 ```
 
-### 3. 运行很慢/卡顿
+### 3. Running Slow/Laggy
 
-**解决方案：**
-- 降低分辨率: 修改config中的 `camera.resolution` 为 `[1280, 720]` 或 `[640, 480]`
-- 使用CPU配置: `--config config/config_cpu.yaml`
-- 关闭调试模式: 不要使用 `--debug` 参数
+**Solutions:**
+- Lower resolution: Modify `camera.resolution` in config to `[1280, 720]` or `[640, 480]`
+- Use CPU configuration: `--config config/config_cpu.yaml`
+- Disable debug mode: Don't use `--debug` parameter
 
-### 4. SessionTracker没有启用
+### 4. SessionTracker Not Enabled
 
-**检查启动日志中是否有：**
+**Check if startup log contains:**
 ```
-[BehaviorStateMachine] SessionTracker已启用
+[BehaviorStateMachine] SessionTracker enabled
 ```
 
-**如果没有：**
-- 检查 `src/analytics/session_tracker.py` 是否存在
-- 检查导入是否成功（不应该有ImportError）
+**If not:**
+- Check if `src/analytics/session_tracker.py` exists
+- Check if import is successful (should not have ImportError)
 
-### 5. 查看实时统计
+### 5. View Real-time Statistics
 
-**目前SessionTracker在后台运行，界面上还没有显示。**
+**Currently SessionTracker runs in background, not displayed in interface.**
 
-**查看实时数据：**
+**View real-time data:**
 ```python
-# 在另一个终端运行
+# Run in another terminal
 python query_stats.py
 ```
 
-**下一步开发：**我们将添加：
-- 屏幕上显示当前会话时长
-- 显示今日统计面板
-- 久坐超过30分钟时红色警告
+**Next development steps:** We will add:
+- Display current session duration on screen
+- Display today's statistics panel
+- Red warning when sitting exceeds 30 minutes
 
 ---
 
-## 键盘控制
+## Keyboard Controls
 
-运行时支持的按键：
+Supported keys during runtime:
 
-- **q**: 退出程序
-- **空格**: 暂停/继续
-- **s**: 截图保存
-- **d**: 切换调试模式
-- **r**: 重置ROI区域
+- **q**: Exit program
+- **Space**: Pause/resume
+- **s**: Screenshot save
+- **d**: Toggle debug mode
+- **r**: Reset ROI area
 
 ---
 
-## 数据存储
+## Data Storage
 
-### 数据库位置
+### Database Location
 ```
 data/database.db
 ```
 
-### 表结构
+### Table Structure
 ```sql
 state_history:
-  - id: 记录ID
-  - timestamp: 结束时间戳
-  - state: 状态 (sitting/standing/lying/sleeping)
-  - zone: 区域 (bed/chair/desk等)
-  - duration: 持续时长（秒）
-  - created_at: 记录创建时间
+  - id: Record ID
+  - timestamp: End timestamp
+  - state: State (sitting/standing/lying/sleeping)
+  - zone: Zone (bed/chair/desk, etc.)
+  - duration: Duration (seconds)
+  - created_at: Record creation time
 ```
 
-### 备份数据
+### Backup Data
 ```bash
-# 备份整个数据库
+# Backup entire database
 cp data/database.db data/database_backup_$(date +%Y%m%d).db
 
-# 导出为CSV
+# Export to CSV
 sqlite3 -header -csv data/database.db "SELECT * FROM state_history;" > sessions.csv
 ```
 
 ---
 
-## 完整启动流程示例
+## Complete Startup Process Example
 
 ```bash
-# 1. 克隆项目（如果还没有）
+# 1. Clone project (if not already done)
 cd ~/Camera
 
-# 2. 安装依赖
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. 确认摄像头可用
+# 3. Confirm camera is available
 # Linux:
 ls /dev/video*
-# Windows: 打开"相机"应用测试
+# Windows: Open "Camera" app to test
 
-# 4. 运行（GPU模式）
+# 4. Run (GPU mode)
 python main.py --config config/config_gpu.yaml
 
-# 5. 观察启动日志，确认SessionTracker已启用
-# [BehaviorStateMachine] SessionTracker已启用  ← 这行很重要
+# 5. Observe startup log, confirm SessionTracker is enabled
+# [BehaviorStateMachine] SessionTracker enabled  ← This line is important
 
-# 6. 在摄像头前坐下/站立，让系统检测你的姿态
+# 6. Sit/stand in front of camera, let system detect your posture
 
-# 7. 另开一个终端，查看统计数据
+# 7. Open another terminal to view statistics
 python query_stats.py
 
-# 8. 按'q'键退出
+# 8. Press 'q' key to exit
 ```
 
 ---
 
-## 下一步计划
+## Next Steps
 
-当前SessionTracker已在后台工作，正在记录你的活动数据。
+SessionTracker is now working in the background, recording your activity data.
 
-**即将添加的功能：**
-1. ✅ SessionTracker后台运行 (已完成)
-2. ⏳ 屏幕显示当前会话时长 (开发中)
-3. ⏳ 显示今日统计面板 (开发中)
-4. ⏳ 久坐警告提示 (开发中)
-5. ⏳ 周报/月报生成 (计划中)
-6. ⏳ 导出Excel报表 (计划中)
+**Features to be added:**
+1. ✅ SessionTracker background running (completed)
+2. ⏳ Display current session duration on screen (in development)
+3. ⏳ Display today's statistics panel (in development)
+4. ⏳ Prolonged sitting warning prompt (in development)
+5. ⏳ Weekly/monthly report generation (planned)
+6. ⏳ Export Excel reports (planned)
 
-现在就开始运行，让SessionTracker开始为你记录活动数据吧！📊
+Start running now and let SessionTracker begin recording your activity data! 📊
