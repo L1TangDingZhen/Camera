@@ -67,8 +67,8 @@ behavior:
 
   # 事件判断
   events:
-    enter_duration: 2  # 降低到2秒，减少状态切换延迟
-    leave_duration: 2
+    enter_duration: 4  # 增加到4秒，减少误判（特别是侧身转向时）
+    leave_duration: 3
     night_start: "22:00"
     night_end: "06:00"
 
