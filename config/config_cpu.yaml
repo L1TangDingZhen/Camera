@@ -23,8 +23,8 @@ models:
 
 camera:
   source: 0  # 0=默认摄像头, 或视频文件路径
-  fps: 10  # CPU模式降低帧率
-  resolution: [320, 240]  # 降低分辨率提升性能
+  fps: 15  # 提升到15帧以获得更好的体验
+  resolution: [1280, 720]  # 720p - 平衡性能和显示质量
   flip: false
   rotation: 0
 
