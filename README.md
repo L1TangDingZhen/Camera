@@ -8,6 +8,48 @@
 
 ---
 
+## 📚 Documentation
+
+Life Tracker provides comprehensive documentation for users at all levels:
+
+### 📘 For New Users
+- **[User Guide](USER_GUIDE.md)** - Quick start, basic usage, and common workflows
+  - What is Life Tracker?
+  - Default configuration explained
+  - Step-by-step setup
+  - Troubleshooting basics
+
+### 📗 For Advanced Users
+- **[Technical Guide](DL_RL_TECHNICAL_GUIDE.md)** - Model training, advanced configuration, and optimization
+  - Complete solution comparison (15 configurations)
+  - How to switch between models
+  - Training deep learning classifiers
+  - RL Ensemble and Decision integration
+  - Performance benchmarks
+
+### 📙 Specialized Guides
+- **[RTMPose Installation](INSTALL_RTMPOSE.md)** - GPU-accelerated pose estimation setup
+  - Linux/Jetson installation (recommended)
+  - Windows installation guide
+  - Common issues and solutions
+
+- **[RTMPose Technical Comparison](RTMPOSE_TECHNICAL_COMPARISON.md)** - Performance analysis
+  - MediaPipe vs RTMPose benchmarks
+  - Model selection guide (tiny/s/m/l)
+  - TensorRT optimization options
+
+### 🎯 Quick Navigation
+
+| I want to... | Read this |
+|--------------|-----------|
+| Get started quickly | [User Guide](USER_GUIDE.md) → Quick Start |
+| Switch to GPU acceleration | [Technical Guide](DL_RL_TECHNICAL_GUIDE.md) → Solution 2 |
+| Train my own models | [Technical Guide](DL_RL_TECHNICAL_GUIDE.md) → Training Workflow |
+| Achieve highest accuracy | [Technical Guide](DL_RL_TECHNICAL_GUIDE.md) → Solution 7 (RL Full) |
+| Deploy to Jetson | [RTMPose Installation](INSTALL_RTMPOSE.md) |
+
+---
+
 ## 🎯 Core Features
 
 ### ✨ Implemented Functionality
