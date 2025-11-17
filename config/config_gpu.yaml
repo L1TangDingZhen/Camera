@@ -1,81 +1,81 @@
-# Life Tracker - GPU模式配置
-# 适用于：PC开发、Jetson生产、高性能需求
+# Life Tracker - GPU Mode Configuration
+# For: PC development, Jetson production, high-performance requirements
 
 name: "GPU Mode"
 device: cuda:0
 
 hardware:
   name: "NVIDIA GPU (RTX/Jetson)"
-  note: "需要CUDA支持"
+  note: "Requires CUDA support"
 
 models:
   person:
-    model: yolov8m.pt  # 中等模型，精度更高（若性能不足可改回yolov8s.pt）
+    model: yolov8m.pt  # Medium model, higher accuracy (can change back to yolov8s.pt if performance insufficient)
     device: cuda:0
     confidence: 0.5
     iou: 0.45
 
   # ========================================================================
-  # 姿态估计模型配置 - 模型切换位置
+  # Pose Estimation Model Configuration - Model Switching Location
   # ========================================================================
   pose:
-    # ===== 选项1：MediaPipe（默认，推荐用于开发测试） =====
-    backend: mediapipe  # 👈 改这里切换模型！
+    # ===== Option 1: MediaPipe (Default, recommended for development/testing) =====
+    backend: mediapipe  # 👈 Change this to switch models!
     complexity: 1       # 0=Lite, 1=Full, 2=Heavy
-    device: cpu         # MediaPipe只支持CPU
+    device: cpu         # MediaPipe only supports CPU
     confidence: 0.3
 
-    # 特点：
-    #   - 速度: ~40-50ms (CPU)
-    #   - 精度: AP ~67%
-    #   - 优点: 安装简单，跨平台兼容好
-    #   - 适用: Windows开发、快速测试
+    # Features:
+    #   - Speed: ~40-50ms (CPU)
+    #   - Accuracy: AP ~67%
+    #   - Pros: Easy installation, good cross-platform compatibility
+    #   - Use for: Windows development, quick testing
     # ========================================================
 
-    # ===== 选项2：RTMPose（推荐用于生产部署） =====
-    # 取消下面的注释并注释掉上面的MediaPipe配置以启用RTMPose
+    # ===== Option 2: RTMPose (Recommended for production deployment) =====
+    # Uncomment lines below and comment out MediaPipe config above to enable RTMPose
     #
-    # backend: rtmpose  # 👈 改成这个！
-    # model: rtmpose-s  # 可选: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
+    # backend: rtmpose  # 👈 Change to this!
+    # model: rtmpose-s  # Options: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
     # config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
     # checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
-    # device: cuda:0    # RTMPose需要GPU
+    # device: cuda:0    # RTMPose requires GPU
     # confidence: 0.3
     #
-    # 特点：
-    #   - 速度: ~12ms (GPU + FP16)
-    #   - 精度: AP ~68.5%
-    #   - 优点: GPU加速，精度更高，支持TensorRT
-    #   - 适用: Jetson部署、GPU生产环境
+    # Features:
+    #   - Speed: ~12ms (GPU + FP16)
+    #   - Accuracy: AP ~68.5%
+    #   - Pros: GPU acceleration, higher accuracy, TensorRT support
+    #   - Use for: Jetson deployment, GPU production environments
     #
-    # 安装说明：
+    # Installation:
     #   1. pip install openmim
     #   2. mim install mmcv==2.0.0 mmpose==1.0.0
     #   3. python download_rtmpose_models.py --model rtmpose-s
-    #   4. 详细说明请参考：INSTALL_RTMPOSE.md
+    #   4. See detailed guide: INSTALL_RTMPOSE.md
     #
-    # ⚠️ Windows用户注意：
-    #   - MMPose在Windows上安装复杂，建议使用WSL2或继续使用MediaPipe
-    #   - 详见 INSTALL_RTMPOSE.md
+    # ⚠️ Windows Users Note:
+    #   - MMPose installation on Windows is complex, recommend using WSL2 or continue with MediaPipe
+    #   - See INSTALL_RTMPOSE.md for details
     # ========================================================
 
 camera:
-  source: 0  # 0=默认摄像头, 或视频文件路径
-  fps: 30  # GPU模式支持高帧率
-  resolution: [1920, 1080]  # Full HD - RTX 4070可以处理
+  source: 0  # 0=default camera, or video file path
+  fps: 30  # GPU mode supports high frame rate
+  resolution: [1920, 1080]  # Full HD - RTX 4070 can handle
   flip: false
   rotation: 0
 
 inference:
   skip_frames: 0
-  detection_interval: 1  # GPU模式每帧都检测（不跳帧）
+  detection_interval: 1  # GPU mode detects every frame (no skipping)
   max_buffer_size: 150
 
 roi:
   zones:
     bed:
       enabled: true
-      points: []  # 使用calibrate_roi.py标定
+      points: []  # Calibrate using calibrate_roi.py
     door:
       enabled: true
       points: []
@@ -87,74 +87,74 @@ roi:
       points: []
 
 behavior:
-  # 坐姿判断阈值
+  # Sitting posture thresholds
   sitting:
-    hip_height_min: 0.3  # 相对身高
+    hip_height_min: 0.3  # Relative to height
     hip_height_max: 0.6
-    knee_angle_max: 120  # 度
+    knee_angle_max: 120  # degrees
 
-  # 躺姿判断阈值
+  # Lying posture thresholds
   lying:
-    body_angle_max: 30  # 身体与水平面角度
-    shoulder_hip_ratio: 0.15  # 肩膀-臀部高度差
+    body_angle_max: 30  # Body angle to horizontal plane
+    shoulder_hip_ratio: 0.15  # Shoulder-hip height difference
 
-  # 睡眠判断
+  # Sleep detection
   sleeping:
-    still_duration: 300  # 秒，持续不动视为睡眠
-    motion_threshold: 0.02  # 运动阈值
+    still_duration: 300  # seconds, continuous stillness considered sleep
+    motion_threshold: 0.02  # Motion threshold
 
-  # 事件判断
+  # Event detection
   events:
-    enter_duration: 2  # 降低到2秒，减少状态切换延迟
+    enter_duration: 2  # Reduced to 2 seconds, minimize state transition delay
     leave_duration: 2
     night_start: "22:00"
     night_end: "06:00"
 
   # ========================================================================
-  # 分类器配置 - 姿态分类器切换位置
+  # Classifier Configuration - Posture Classifier Switching Location
   # ========================================================================
   classifier:
-    # ===== 选项1：SVM分类器（默认，推荐） =====
-    type: svm  # 👈 改这里切换分类器！
+    # ===== Option 1: SVM Classifier (Default, recommended) =====
+    type: svm  # 👈 Change this to switch classifier!
     path: models/pose_classifier_svm.pkl
     device: cpu
 
-    # 特点：
-    #   - 速度: ~1ms (CPU)
-    #   - 精度: 90-95% (基于训练数据)
-    #   - 优点: 快速、稳定、无需GPU
-    #   - 适用: 生产环境、实时性要求高
+    # Features:
+    #   - Speed: ~1ms (CPU)
+    #   - Accuracy: 90-95% (based on training data)
+    #   - Pros: Fast, stable, no GPU required
+    #   - Use for: Production environments, high real-time requirements
     #
-    # 训练方法：
+    # Training:
     #   python train_svm.py --data training_data
     # ========================================================
 
-    # ===== 选项2：深度学习分类器 =====
-    # 取消下面的注释以启用深度学习分类器
+    # ===== Option 2: Deep Learning Classifier =====
+    # Uncomment lines below to enable deep learning classifier
     #
-    # type: deep_learning  # 👈 改成这个！
-    # model_type: mlp      # 可选: mlp, lstm, transformer
+    # type: deep_learning  # 👈 Change to this!
+    # model_type: mlp      # Options: mlp, lstm, transformer
     # path: models/pose_classifier_mlp.pth
-    # device: cuda:0       # 或 cpu
+    # device: cuda:0       # or cpu
     #
-    # 特点：
-    #   - MLP: ~1ms, 适合单帧分类
-    #   - LSTM: ~5ms, 适合序列数据（更准确）
-    #   - Transformer: ~10ms, 最高精度
-    #   - 精度: 通常比SVM高2-5%
+    # Features:
+    #   - MLP: ~1ms, suitable for single-frame classification
+    #   - LSTM: ~5ms, suitable for sequence data (more accurate)
+    #   - Transformer: ~10ms, highest accuracy
+    #   - Accuracy: Usually 2-5% higher than SVM
     #
-    # 训练方法：
+    # Training:
     #   python train_dl.py --model mlp --epochs 100 --device cuda
     # ========================================================
 
-    # ===== 选项3：RL Ensemble（多模型融合） =====
-    # 取消下面的注释以启用RL Ensemble
+    # ===== Option 3: RL Ensemble (Multi-model fusion) =====
+    # Uncomment lines below to enable RL Ensemble
     #
-    # type: rl_ensemble  # 👈 改成这个！
+    # type: rl_ensemble  # 👈 Change to this!
     # device: cuda:0
     # agent_path: models/ensemble_agent.pt
     #
-    # # 基础分类器列表（至少2个）
+    # # Base classifier list (at least 2)
     # ensemble_models:
     #   - type: svm
     #     path: models/pose_classifier_svm.pkl
@@ -169,51 +169,51 @@ behavior:
     #     path: models/pose_classifier_lstm.pth
     #     device: cuda:0
     #
-    # 特点：
-    #   - 动态加权融合多个分类器
-    #   - 根据环境自适应调整权重
-    #   - 精度: 通常比单一模型高3-8%
-    #   - 适用: 精度优先、多样化环境
+    # Features:
+    #   - Dynamic weighted fusion of multiple classifiers
+    #   - Adaptively adjusts weights based on environment
+    #   - Accuracy: Usually 3-8% higher than single model
+    #   - Use for: Accuracy priority, diverse environments
     #
-    # 训练方法：
+    # Training:
     #   python train_ensemble.py --models svm,mlp,lstm --epochs 100
     # ========================================================
 
   # ========================================================================
-  # 决策策略配置 - 决策策略切换位置
+  # Decision Strategy Configuration - Decision Strategy Switching Location
   # ========================================================================
   decision:
-    # ===== 选项1：简单防抖（默认） =====
-    type: simple  # 👈 改这里切换决策策略！
+    # ===== Option 1: Simple Debouncing (Default) =====
+    type: simple  # 👈 Change this to switch decision strategy!
 
-    # 特点：
-    #   - 基于时间的简单防抖
-    #   - 连续N秒稳定后才输出状态
-    #   - 速度快、逻辑简单
-    #   - 适用: 大多数场景
+    # Features:
+    #   - Time-based simple debouncing
+    #   - Only output state after N seconds of stability
+    #   - Fast, simple logic
+    #   - Use for: Most scenarios
     # ========================================================
 
-    # ===== 选项2：RL自适应决策 =====
-    # 取消下面的注释以启用RL决策
+    # ===== Option 2: RL Adaptive Decision =====
+    # Uncomment lines below to enable RL decision
     #
-    # type: rl  # 👈 改成这个！
+    # type: rl  # 👈 Change to this!
     # agent_path: models/decision_agent.pt
     # device: cuda:0
     #
-    # 特点：
-    #   - 学习何时输出分类结果
-    #   - 动作: classify_now, wait, verify, reject
-    #   - 减少误报，提高决策质量
-    #   - 适用: 复杂环境、精度优先
+    # Features:
+    #   - Learns when to output classification results
+    #   - Actions: classify_now, wait, verify, reject
+    #   - Reduces false alarms, improves decision quality
+    #   - Use for: Complex environments, accuracy priority
     #
-    # 训练方法：
+    # Training:
     #   python train_decision_agent.py --classifier svm --epochs 100
     # ========================================================
 
 storage:
   database: "data/database.db"
-  backup_interval: 86400  # 秒，每天备份
-  retention_days: 90  # 数据保留天数
+  backup_interval: 86400  # seconds, daily backup
+  retention_days: 90  # days to retain data
 
 logging:
   level: INFO  # DEBUG, INFO, WARNING, ERROR
@@ -223,19 +223,19 @@ logging:
   performance_metrics: true
 
 debug:
-  # 调试模式配置
-  show_keypoints: false  # 显示关键点
-  show_skeleton: false   # 显示骨架
-  show_angles: false     # 显示角度计算
-  show_state_info: true  # 显示状态判断信息
+  # Debug mode configuration
+  show_keypoints: false  # Show keypoints
+  show_skeleton: false   # Show skeleton
+  show_angles: false     # Show angle calculations
+  show_state_info: true  # Show state detection info
 
 web:
   host: "0.0.0.0"
   port: 5000
   debug: true
 
-# TensorRT优化（Jetson）
+# TensorRT Optimization (Jetson)
 tensorrt:
-  enabled: false  # PC开发时为false，Jetson上改为true
+  enabled: false  # false for PC development, change to true on Jetson
   fp16_mode: true
   workspace_size: 4096  # MB

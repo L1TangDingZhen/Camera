@@ -1,514 +1,514 @@
-# Life Tracker 用户手册
+# Life Tracker User Guide
 
-欢迎使用Life Tracker！本手册将帮助你快速上手，了解系统的核心功能和基本使用方法。
+Welcome to Life Tracker! This guide will help you get started quickly and understand the core features and basic usage.
 
-## 📖 目录
+## 📖 Table of Contents
 
-- [项目介绍](#项目介绍)
-- [核心功能](#核心功能)
-- [系统架构](#系统架构)
-- [当前默认配置](#当前默认配置)
-- [快速开始](#快速开始)
-- [基础使用流程](#基础使用流程)
-- [常用命令清单](#常用命令清单)
-- [进阶使用](#进阶使用)
-- [故障排查](#故障排查)
-- [未来发展方向](#未来发展方向)
-
----
-
-## 项目介绍
-
-**Life Tracker** 是一个基于计算机视觉的日常活动分析系统，能够自动识别和记录你的坐、站、躺等姿态状态，帮助你了解自己的作息规律。
-
-### 主要特点
-
-- ✅ **自动识别**：无需手动记录，摄像头自动识别姿态
-- ✅ **隐私保护**：所有数据本地处理，不上传云端
-- ✅ **轻量高效**：支持CPU运行，也可以使用GPU加速
-- ✅ **开箱即用**：默认配置无需训练，立即可用
-- ✅ **高度可扩展**：支持多种模型组合，满足不同精度需求
-
-### 适用场景
-
-- 📊 **健康监测**：记录久坐时长，提醒适时运动
-- 🛋️ **作息分析**：了解每天坐、站、躺的时间分布
-- 💤 **睡眠追踪**：自动识别睡眠时段
-- 🏠 **智能家居**：根据状态自动控制灯光、空调等设备
+- [Project Introduction](#project-introduction)
+- [Core Features](#core-features)
+- [System Architecture](#system-architecture)
+- [Current Default Configuration](#current-default-configuration)
+- [Quick Start](#quick-start)
+- [Basic Usage Workflow](#basic-usage-workflow)
+- [Common Commands](#common-commands)
+- [Advanced Usage](#advanced-usage)
+- [Troubleshooting](#troubleshooting)
+- [Future Development](#future-development)
 
 ---
 
-## 核心功能
+## Project Introduction
 
-### 1. 姿态识别
+**Life Tracker** is a computer vision-based daily activity analysis system that automatically recognizes and records your sitting, standing, and lying postures to help you understand your daily routines.
 
-系统可以识别以下三种基本姿态：
+### Key Features
 
-| 姿态 | 描述 | 判断标准 |
-|------|------|---------|
-| 🪑 **坐** (Sitting) | 坐在椅子或床上 | 臀部高度适中、膝盖弯曲 |
-| 🧍 **站** (Standing) | 站立状态 | 身体直立、膝盖伸直 |
-| 🛌 **躺** (Lying) | 躺在床上或沙发 | 身体与水平面角度小 |
+- ✅ **Automatic Recognition**: No manual logging needed, camera automatically detects postures
+- ✅ **Privacy Protection**: All data processed locally, no cloud uploads
+- ✅ **Lightweight & Efficient**: Supports CPU operation, GPU acceleration available
+- ✅ **Ready to Use**: Default configuration works out of the box, no training required
+- ✅ **Highly Extensible**: Supports multiple model combinations for different accuracy needs
 
-### 2. 事件追踪
+### Use Cases
 
-- 进入状态：当姿态稳定持续一定时间后记录
-- 离开状态：检测到姿态变化时记录
-- 持续时长：自动计算每个状态的持续时间
-
-### 3. 数据存储
-
-- 本地SQLite数据库存储
-- 自动备份（可配置）
-- 支持数据导出和分析
-
-### 4. 可视化界面
-
-- 实时摄像头画面
-- 当前状态显示
-- 关键点可视化（可选）
-- Web界面（可选）
+- 📊 **Health Monitoring**: Track prolonged sitting duration, remind to move
+- 🛋️ **Routine Analysis**: Understand daily sitting/standing/lying time distribution
+- 💤 **Sleep Tracking**: Automatically identify sleep periods
+- 🏠 **Smart Home**: Automatically control lights, AC based on detected state
 
 ---
 
-## 系统架构
+## Core Features
 
-Life Tracker采用**三层架构**，每一层都可以独立配置：
+### 1. Posture Recognition
+
+The system can recognize three basic postures:
+
+| Posture | Description | Detection Criteria |
+|---------|-------------|-------------------|
+| 🪑 **Sitting** | Sitting on chair or bed | Moderate hip height, bent knees |
+| 🧍 **Standing** | Standing upright | Upright body, straight knees |
+| 🛌 **Lying** | Lying on bed or sofa | Small body-to-horizontal angle |
+
+### 2. Event Tracking
+
+- Enter State: Logged after posture remains stable for a duration
+- Leave State: Logged when posture change detected
+- Duration: Automatically calculates duration of each state
+
+### 3. Data Storage
+
+- Local SQLite database storage
+- Automatic backup (configurable)
+- Supports data export and analysis
+
+### 4. Visualization Interface
+
+- Real-time camera feed
+- Current state display
+- Keypoint visualization (optional)
+- Web interface (optional)
+
+---
+
+## System Architecture
+
+Life Tracker uses a **three-layer architecture**, each layer independently configurable:
 
 ```
 ┌──────────────────────────────────────────────┐
-│           决策层 (Decision Layer)             │
-│  何时输出结果 / 如何减少误报                    │
-│  默认：Simple防抖                              │
+│           Decision Layer                      │
+│  When to output / How to reduce false alarms │
+│  Default: Simple debouncing                   │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│          分类层 (Classifier Layer)            │
-│  判断当前姿态：坐/站/躺                         │
-│  默认：SVM分类器                               │
+│          Classifier Layer                     │
+│  Determine current posture: sit/stand/lie    │
+│  Default: SVM classifier                      │
 └──────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────┐
-│       姿态估计层 (Pose Estimation Layer)      │
-│  从图像中提取人体关键点                         │
-│  默认：MediaPipe                               │
+│       Pose Estimation Layer                   │
+│  Extract human keypoints from image           │
+│  Default: MediaPipe                           │
 └──────────────────────────────────────────────┘
 ```
 
 ---
 
-## 当前默认配置
+## Current Default Configuration
 
-Life Tracker的默认配置经过优化，**开箱即用，无需额外训练**：
+Life Tracker's default configuration is optimized and **ready to use without additional training**:
 
-### 🎯 默认方案
+### 🎯 Default Solution
 
-| 层级 | 使用模型 | 特点 | 硬件要求 |
-|------|---------|------|---------|
-| 姿态估计 | **MediaPipe** | CPU友好、跨平台 | CPU |
-| 分类器 | **SVM** | 快速、稳定、已训练 | CPU |
-| 决策策略 | **Simple防抖** | 简单有效 | - |
+| Layer | Model | Features | Hardware Requirements |
+|-------|-------|----------|----------------------|
+| Pose Estimation | **MediaPipe** | CPU-friendly, cross-platform | CPU |
+| Classifier | **SVM** | Fast, stable, pre-trained | CPU |
+| Decision Strategy | **Simple Debouncing** | Simple and effective | - |
 
-### 📊 默认性能
+### 📊 Default Performance
 
-- **精度**：90-95%（基于标准环境）
-- **延迟**：约50ms/帧
-- **资源占用**：中等（约300MB内存）
-- **设备要求**：普通PC即可，无需GPU
+- **Accuracy**: 90-95% (based on standard environment)
+- **Latency**: ~50ms/frame
+- **Resource Usage**: Moderate (~300MB RAM)
+- **Device Requirements**: Regular PC, no GPU needed
 
-### ✨ 默认方案的优点
+### ✨ Advantages of Default Solution
 
-- ✅ **即插即用**：无需训练，直接运行
-- ✅ **跨平台**：Windows/Linux/macOS都支持
-- ✅ **稳定可靠**：经过大量测试
-- ✅ **资源友好**：CPU运行，笔记本也能用
+- ✅ **Plug and Play**: No training required, run immediately
+- ✅ **Cross-platform**: Supports Windows/Linux/macOS
+- ✅ **Stable & Reliable**: Extensively tested
+- ✅ **Resource Friendly**: CPU-only, works on laptops
 
-### ⚠️ 适用场景
+### ⚠️ Suitable Scenarios
 
-默认配置适合：
-- 初次使用，快速体验
-- 日常家用，精度要求不高
-- CPU-only环境
-- 标准光照和角度
+Default configuration is suitable for:
+- First-time use, quick experience
+- Daily home use, moderate accuracy requirements
+- CPU-only environment
+- Standard lighting and angles
 
-如果你需要更高精度或更快速度，请参考 [进阶使用](#进阶使用)。
+For higher accuracy or faster speed, see [Advanced Usage](#advanced-usage).
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 前置要求
+### Prerequisites
 
 1. **Python 3.8+**
-2. **摄像头**（笔记本内置或外接USB摄像头）
-3. **基础依赖**（自动安装）
+2. **Webcam** (built-in laptop or external USB webcam)
+3. **Basic Dependencies** (auto-installed)
 
-### 三步上手
+### Three Steps to Get Started
 
-#### 步骤1：安装依赖
+#### Step 1: Install Dependencies
 
 ```bash
-# 克隆项目
+# Clone the repository
 git clone https://github.com/yourusername/Camera.git
 cd Camera
 
-# 安装核心依赖
+# Install core dependencies
 pip install -r requirements.txt
 ```
 
-**安装内容**：
-- OpenCV（图像处理）
-- MediaPipe（姿态估计）
-- PyTorch（机器学习框架）
-- YOLOv8（人体检测）
-- 其他工具库
+**What gets installed**:
+- OpenCV (image processing)
+- MediaPipe (pose estimation)
+- PyTorch (machine learning framework)
+- YOLOv8 (person detection)
+- Other utility libraries
 
-#### 步骤2：运行系统
+#### Step 2: Run the System
 
 ```bash
-# 使用默认配置运行（GPU模式）
+# Run with default config (GPU mode)
 python main.py --config config/config_gpu.yaml
 
-# 或使用CPU模式（更慢但兼容性好）
+# Or use CPU mode (slower but more compatible)
 python main.py --config config/config_cpu.yaml
 ```
 
-#### 步骤3：观察结果
+#### Step 3: Observe Results
 
-系统启动后，你会看到：
+After system starts, you'll see:
 
 ```
-[初始化] 加载人体检测器...
-[初始化] 加载姿态估计器...
-[MediaPipe] 初始化完成 ✓
-[BehaviorStateMachine] 使用SVM分类器
-[BehaviorStateMachine] 使用简单防抖决策
-[系统] 启动成功！按 'q' 退出
+[Init] Loading person detector...
+[Init] Loading pose estimator...
+[MediaPipe] Initialization complete ✓
+[BehaviorStateMachine] Using SVM classifier
+[BehaviorStateMachine] Using simple debouncing decision
+[System] Started successfully! Press 'q' to quit
 ```
 
-**实时画面**显示：
-- 摄像头视频流
-- 当前检测到的姿态（Sitting/Standing/Lying）
-- 姿态持续时长
-- 人体检测框和关键点（可选）
+**Real-time display shows**:
+- Camera video stream
+- Currently detected posture (Sitting/Standing/Lying)
+- Posture duration
+- Person detection box and keypoints (optional)
 
 ---
 
-## 基础使用流程
+## Basic Usage Workflow
 
-### 1. 首次运行
+### 1. First Run
 
-第一次运行系统，建议：
+For first-time run, we recommend:
 
 ```bash
-# 使用GPU配置（如果有显卡）
+# Use GPU config (if you have a graphics card)
 python main.py --config config/config_gpu.yaml
 
-# 系统会自动：
-# 1. 打开摄像头
-# 2. 检测人体
-# 3. 识别姿态
-# 4. 显示实时结果
+# System will automatically:
+# 1. Open webcam
+# 2. Detect person
+# 3. Recognize posture
+# 4. Display real-time results
 ```
 
-**确认系统正常工作**：
-- ✅ 摄像头画面正常显示
-- ✅ 能检测到人体（绿色框）
-- ✅ 姿态识别准确（尝试坐下、站立、躺下）
+**Confirm system is working**:
+- ✅ Camera feed displays normally
+- ✅ Person detected (green box)
+- ✅ Posture recognition accurate (try sitting, standing, lying)
 
-### 2. 收集训练数据（可选）
+### 2. Collect Training Data (Optional)
 
-如果默认模型精度不够，可以收集自己的数据：
+If default model accuracy is insufficient, collect your own data:
 
 ```bash
-# 收集坐姿数据（60秒）
+# Collect sitting data (60 seconds)
 python collect_data.py --label sitting --duration 60
 
-# 收集站姿数据
+# Collect standing data
 python collect_data.py --label standing --duration 60
 
-# 收集躺姿数据
+# Collect lying data
 python collect_data.py --label lying --duration 60
 ```
 
-**收集建议**：
-- 每个姿态至少收集30-60秒
-- 包含不同角度、光照
-- 模拟真实使用场景
+**Collection tips**:
+- Collect at least 30-60 seconds per posture
+- Include different angles and lighting
+- Simulate real usage scenarios
 
-收集完成后，数据保存在 `training_data/` 目录。
+After collection, data is saved in `training_data/` directory.
 
-### 3. 训练模型（可选）
+### 3. Train Model (Optional)
 
-如果收集了自己的数据，可以重新训练：
+If you collected your own data, you can retrain:
 
 ```bash
-# 训练SVM模型
+# Train SVM model
 python train_svm.py --data training_data
 
-# 新模型会保存到：models/pose_classifier_svm.pkl
-# 下次运行自动使用新模型
+# New model saved to: models/pose_classifier_svm.pkl
+# Next run will automatically use new model
 ```
 
-### 4. 查看分析结果
+### 4. View Analysis Results
 
-系统运行期间，所有数据保存在数据库：
+During system operation, all data is saved to database:
 
 ```bash
-# 查看数据库
+# View database
 sqlite3 data/database.db
 
-# 查询今天的活动记录
+# Query today's activity records
 SELECT * FROM events WHERE date(timestamp) = date('now');
 
-# 统计今天坐了多久
+# Calculate today's sitting duration
 SELECT SUM(duration) FROM events
 WHERE state = 'sitting' AND date(timestamp) = date('now');
 ```
 
 ---
 
-## 常用命令清单
+## Common Commands
 
-### 运行系统
+### Run System
 
 ```bash
-# GPU模式（推荐，如果有显卡）
+# GPU mode (recommended if you have GPU)
 python main.py --config config/config_gpu.yaml
 
-# CPU模式（兼容性好）
+# CPU mode (better compatibility)
 python main.py --config config/config_cpu.yaml
 
-# 指定摄像头设备
+# Specify camera device
 python main.py --config config/config_gpu.yaml --camera 1
 ```
 
-### 数据收集
+### Data Collection
 
 ```bash
-# 收集训练数据
+# Collect training data
 python collect_data.py --label [sitting|standing|lying] --duration 60
 
-# 查看已收集数据
+# View collected data
 ls training_data/
-cat training_data/sitting.json | jq length  # 查看样本数量
+cat training_data/sitting.json | jq length  # Check sample count
 ```
 
-### 模型训练
+### Model Training
 
 ```bash
-# 训练SVM（默认分类器）
+# Train SVM (default classifier)
 python train_svm.py --data training_data
 
-# 查看训练好的模型
+# View trained models
 ls models/
 ```
 
-### 测试和调试
+### Testing and Debugging
 
 ```bash
-# 快速测试
+# Quick test
 python test_quick.py
 
-# 鲁棒性测试（测试模型准确率）
+# Robustness test (test model accuracy)
 python test_robustness.py --label sitting --duration 30
 
-# 查看日志
+# View logs
 tail -f logs/app.log
 ```
 
-### 配置和维护
+### Configuration and Maintenance
 
 ```bash
-# 查看配置文件
+# View config file
 cat config/config_gpu.yaml
 
-# 备份数据库
+# Backup database
 cp data/database.db data/database_backup.db
 
-# 清理日志
+# Clean logs
 rm logs/*.log
 ```
 
 ---
 
-## 进阶使用
+## Advanced Usage
 
-默认配置已经能满足大多数需求，但如果你想要：
+Default configuration meets most needs, but if you want:
 
-- 🚀 **更快的速度**（GPU加速）
-- 📈 **更高的精度**（深度学习模型）
-- 🎯 **更少的误报**（智能决策）
-- 🔧 **自定义配置**（适应特殊环境）
+- 🚀 **Faster Speed** (GPU acceleration)
+- 📈 **Higher Accuracy** (deep learning models)
+- 🎯 **Fewer False Alarms** (intelligent decision)
+- 🔧 **Custom Configuration** (adapt to special environments)
 
-### 其他可用方案
+### Other Available Solutions
 
-Life Tracker支持多种模型组合方案：
+Life Tracker supports multiple model combination solutions:
 
-| 方案 | 姿态估计 | 分类器 | 精度提升 | 速度提升 | 需要GPU | 需要训练 |
-|------|---------|--------|---------|---------|---------|---------|
-| **默认** | MediaPipe | SVM | 基线 | 基线 | ❌ | ❌ |
-| **GPU加速** | RTMPose | SVM | - | **4x** ⚡ | ✅ | ❌ |
-| **高精度** | RTMPose | MLP | **+5%** | 4x | ✅ | ✅ |
-| **最高精度** | RTMPose | Ensemble | **+8%** | 3x | ✅ | ✅ |
+| Solution | Pose Estimation | Classifier | Accuracy Gain | Speed Gain | Needs GPU | Needs Training |
+|----------|----------------|------------|---------------|-----------|-----------|----------------|
+| **Default** | MediaPipe | SVM | Baseline | Baseline | ❌ | ❌ |
+| **GPU Accelerated** | RTMPose | SVM | - | **4x** ⚡ | ✅ | ❌ |
+| **High Accuracy** | RTMPose | MLP | **+5%** | 4x | ✅ | ✅ |
+| **Highest Accuracy** | RTMPose | Ensemble | **+8%** | 3x | ✅ | ✅ |
 
-### 📚 详细技术文档
+### 📚 Detailed Technical Documentation
 
-想要了解如何切换方案、训练模型、调优参数？
+Want to learn how to switch solutions, train models, tune parameters?
 
-➡️ **请参阅**：[DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
+➡️ **See**: [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
 
-技术文档包含：
-- 所有方案的详细对比
-- 逐步切换指南
-- 完整训练流程
-- 模型性能基准
-- 高级配置选项
+Technical documentation includes:
+- Detailed comparison of all solutions
+- Step-by-step switching guide
+- Complete training workflow
+- Model performance benchmarks
+- Advanced configuration options
 
 ---
 
-## 故障排查
+## Troubleshooting
 
-### 问题1：摄像头打不开
+### Problem 1: Cannot Open Camera
 
-**症状**：
+**Symptoms**:
 ```
 Error: Cannot open camera
 ```
 
-**解决方案**：
+**Solutions**:
 ```bash
-# 检查摄像头设备
+# Check camera devices
 ls /dev/video*  # Linux
-# 或在Windows设备管理器中查看
+# Or check in Windows Device Manager
 
-# 尝试其他设备ID
+# Try other device IDs
 python main.py --config config/config_gpu.yaml --camera 1
 python main.py --config config/config_gpu.yaml --camera 2
 ```
 
-### 问题2：画面显示太小/模糊
+### Problem 2: Display Too Small/Blurry
 
-**症状**：窗口很小，字体看不清
+**Symptoms**: Window very small, text hard to read
 
-**解决方案**：
+**Solutions**:
 ```yaml
-# 修改配置文件：config/config_gpu.yaml
+# Modify config file: config/config_gpu.yaml
 camera:
-  resolution: [1280, 720]  # 改成更高分辨率
-  fps: 30  # 提高帧率
+  resolution: [1280, 720]  # Change to higher resolution
+  fps: 30  # Increase frame rate
 ```
 
-### 问题3：识别不准确
+### Problem 3: Inaccurate Recognition
 
-**可能原因**：
-- 光照不好
-- 摄像头角度不对
-- 姿态不典型
+**Possible Causes**:
+- Poor lighting
+- Wrong camera angle
+- Atypical posture
 
-**解决方案**：
+**Solutions**:
 
-**方案A**：调整环境
-- 改善光照
-- 调整摄像头位置（建议正面、距离2-3米）
+**Solution A**: Adjust Environment
+- Improve lighting
+- Adjust camera position (recommended: front view, 2-3 meters distance)
 
-**方案B**：收集训练数据
+**Solution B**: Collect Training Data
 ```bash
-# 在你的实际环境中收集数据
+# Collect data in your actual environment
 python collect_data.py --label sitting --duration 120
 python collect_data.py --label standing --duration 120
 python collect_data.py --label lying --duration 120
 
-# 重新训练
+# Retrain
 python train_svm.py --data training_data
 ```
 
-**方案C**：切换到更高精度模型
-参考 [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
+**Solution C**: Switch to Higher Accuracy Model
+See [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
 
-### 问题4：程序运行慢/卡顿
+### Problem 4: Slow/Laggy
 
-**症状**：FPS很低，画面卡顿
+**Symptoms**: Low FPS, choppy video
 
-**解决方案**：
+**Solutions**:
 
 ```yaml
-# 方法1：降低分辨率
+# Method 1: Reduce resolution
 camera:
-  resolution: [640, 480]  # 从1280x720降到640x480
-  fps: 15  # 降低帧率
+  resolution: [640, 480]  # From 1280x720 to 640x480
+  fps: 15  # Reduce frame rate
 
-# 方法2：跳帧处理
+# Method 2: Skip frames
 inference:
-  skip_frames: 2  # 每2帧处理一次
-  detection_interval: 3  # 每3帧检测一次人体
+  skip_frames: 2  # Process every 2 frames
+  detection_interval: 3  # Detect person every 3 frames
 ```
 
-或者切换到CPU配置：
+Or switch to CPU config:
 ```bash
 python main.py --config config/config_cpu.yaml
 ```
 
-### 问题5：找不到训练数据
+### Problem 5: Training Data Not Found
 
-**症状**：
+**Symptoms**:
 ```
 FileNotFoundError: training_data/sitting.json not found
 ```
 
-**解决方案**：
+**Solutions**:
 ```bash
-# 检查数据文件
+# Check data files
 ls training_data/
 
-# 如果没有，先收集数据
+# If none, collect data first
 python collect_data.py --label sitting --duration 60
 ```
 
-### 更多问题？
+### More Questions?
 
-- 查看日志：`cat logs/app.log`
-- 查看Issues：https://github.com/yourusername/Camera/issues
-- 阅读技术文档：[DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
+- Check logs: `cat logs/app.log`
+- Check Issues: https://github.com/yourusername/Camera/issues
+- Read technical docs: [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
 
 ---
 
-## 未来发展方向
+## Future Development
 
-Life Tracker正在持续改进，未来计划：
+Life Tracker is continuously improving, future plans:
 
-### 短期计划
+### Short-term Plans
 
-- ✅ **RTMPose集成**（GPU加速姿态估计）- 已完成
-- ✅ **深度学习分类器**（MLP/LSTM/Transformer）- 已完成
-- ✅ **RL集成**（Ensemble融合 + 自适应决策）- 已完成
-- 🔄 **Jetson优化**（边缘设备部署）- 进行中
-- 📱 **移动端App**（Android/iOS）- 计划中
+- ✅ **RTMPose Integration** (GPU-accelerated pose estimation) - Completed
+- ✅ **Deep Learning Classifiers** (MLP/LSTM/Transformer) - Completed
+- ✅ **RL Integration** (Ensemble fusion + adaptive decision) - Completed
+- 🔄 **Jetson Optimization** (edge device deployment) - In Progress
+- 📱 **Mobile App** (Android/iOS) - Planned
 
-### 长期愿景
+### Long-term Vision
 
-- 🎯 **更多姿态识别**（工作、休息、运动等）
-- 🏠 **智能家居集成**（Home Assistant、HomeKit）
-- 📊 **高级数据分析**（趋势预测、健康建议）
-- 🌐 **多人追踪**（家庭成员独立追踪）
-- 🤖 **AI助手集成**（语音交互、智能提醒）
+- 🎯 **More Posture Recognition** (working, resting, exercising, etc.)
+- 🏠 **Smart Home Integration** (Home Assistant, HomeKit)
+- 📊 **Advanced Data Analysis** (trend prediction, health recommendations)
+- 🌐 **Multi-person Tracking** (independent tracking for family members)
+- 🤖 **AI Assistant Integration** (voice interaction, smart reminders)
 
-### 贡献
+### Contributing
 
-欢迎贡献代码、提出建议或报告问题：
+Contributions welcome - code, suggestions, or issue reports:
 - GitHub: https://github.com/yourusername/Camera
 - Issues: https://github.com/yourusername/Camera/issues
 - Discussions: https://github.com/yourusername/Camera/discussions
 
 ---
 
-## 文档导航
+## Documentation Navigation
 
-- 📘 **用户手册**（当前）：快速上手和基础使用
-- 📗 **技术文档**：[DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md) - 模型训练和高级配置
-- 📙 **RTMPose安装**：[INSTALL_RTMPOSE.md](INSTALL_RTMPOSE.md) - GPU加速姿态估计
-- 📕 **技术对比**：[RTMPOSE_TECHNICAL_COMPARISON.md](RTMPOSE_TECHNICAL_COMPARISON.md) - 性能基准测试
+- 📘 **User Guide** (Current): Quick start and basic usage
+- 📗 **Technical Guide**: [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md) - Model training and advanced configuration
+- 📙 **RTMPose Installation**: [INSTALL_RTMPOSE.md](INSTALL_RTMPOSE.md) - GPU-accelerated pose estimation
+- 📕 **Technical Comparison**: [RTMPOSE_TECHNICAL_COMPARISON.md](RTMPOSE_TECHNICAL_COMPARISON.md) - Performance benchmarks
 
 ---
 
-**开始使用Life Tracker，了解你的每一天！** 🚀
+**Start using Life Tracker and understand your every day!** 🚀

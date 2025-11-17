@@ -1,143 +1,143 @@
-# RTMPose 安装指南
+# RTMPose Installation Guide
 
-本指南提供RTMPose在不同平台的详细安装说明。
+This guide provides detailed installation instructions for RTMPose on different platforms.
 
-## 📋 目录
+## 📋 Table of Contents
 
-- [为什么使用RTMPose](#为什么使用rtmpose)
-- [快速开始](#快速开始)
-- [Linux/Jetson安装（推荐）](#linuxjetson安装推荐)
-- [Windows安装（高级）](#windows安装高级)
-- [验证安装](#验证安装)
-- [常见问题](#常见问题)
-
----
-
-## 为什么使用RTMPose
-
-| 对比项 | MediaPipe (默认) | RTMPose |
-|--------|-----------------|---------|
-| **设备支持** | ❌ CPU only | ✅ CPU + GPU |
-| **速度** | ~50ms (CPU) | ~12ms (GPU FP16) |
-| **精度** | AP ~67% | AP ~68.5% |
-| **平台支持** | ✅ 全平台 | ⚠️ Linux优先 |
-| **安装难度** | ✅ 简单 | ⚠️ 中等-困难 |
-
-**推荐场景**：
-- ✅ 开发测试 → 使用 **MediaPipe** (简单稳定)
-- ✅ 生产部署 → 使用 **RTMPose** (GPU加速)
+- [Why Use RTMPose](#why-use-rtmpose)
+- [Quick Start](#quick-start)
+- [Linux/Jetson Installation (Recommended)](#linuxjetson-installation-recommended)
+- [Windows Installation (Advanced)](#windows-installation-advanced)
+- [Verify Installation](#verify-installation)
+- [FAQ](#faq)
 
 ---
 
-## 快速开始
+## Why Use RTMPose
 
-### 选项A：继续使用MediaPipe（最简单）
+| Comparison | MediaPipe (Default) | RTMPose |
+|-----------|-------------------|---------|
+| **Device Support** | ❌ CPU only | ✅ CPU + GPU |
+| **Speed** | ~50ms (CPU) | ~12ms (GPU FP16) |
+| **Accuracy** | AP ~67% | AP ~68.5% |
+| **Platform Support** | ✅ All platforms | ⚠️ Linux preferred |
+| **Installation Difficulty** | ✅ Simple | ⚠️ Medium-Hard |
 
-如果你只是想开发测试，**不需要安装RTMPose**！
+**Recommended Scenarios**:
+- ✅ Development/Testing → Use **MediaPipe** (simple and stable)
+- ✅ Production Deployment → Use **RTMPose** (GPU acceleration)
+
+---
+
+## Quick Start
+
+### Option A: Continue Using MediaPipe (Simplest)
+
+If you just want to develop and test, **you don't need to install RTMPose**!
 
 ```yaml
 # config/config_gpu.yaml
 models:
   pose:
-    backend: mediapipe  # 使用默认的MediaPipe
+    backend: mediapipe  # Use default MediaPipe
     complexity: 1
     device: cpu
 ```
 
-MediaPipe已经足够好用（AP 67%，50ms），安装简单，跨平台兼容性好。
+MediaPipe is already good enough (AP 67%, 50ms), with simple installation and excellent cross-platform compatibility.
 
-### 选项B：安装RTMPose（高性能）
+### Option B: Install RTMPose (High Performance)
 
-如果你需要：
-- 🚀 更快的速度（12ms vs 50ms）
-- 📈 更高的精度（AP 68.5% vs 67%）
-- 🎯 生产部署到Jetson
+If you need:
+- 🚀 Faster speed (12ms vs 50ms)
+- 📈 Higher accuracy (AP 68.5% vs 67%)
+- 🎯 Production deployment to Jetson
 
-那么请继续阅读下面的安装指南。
+Then continue reading the installation guide below.
 
 ---
 
-## Linux/Jetson安装（推荐）
+## Linux/Jetson Installation (Recommended)
 
-### 环境要求
+### Environment Requirements
 
 - Python 3.8+
 - PyTorch 1.8+ with CUDA 11.1+
 - GCC 5.4+
 - CUDA Toolkit 11.1+
 
-### 步骤1：安装OpenMIM
+### Step 1: Install OpenMIM
 
 ```bash
 pip install openmim
 ```
 
-OpenMIM是OpenMMLab的包管理工具，会自动处理版本兼容性。
+OpenMIM is OpenMMLab's package management tool that automatically handles version compatibility.
 
-### 步骤2：安装MMPose依赖
+### Step 2: Install MMPose Dependencies
 
 ```bash
-# 安装mmcv（会自动选择与PyTorch兼容的版本）
+# Install mmcv (automatically selects version compatible with PyTorch)
 mim install mmcv==2.0.0
 
-# 安装mmengine
+# Install mmengine
 mim install mmengine==0.8.0
 
-# 安装mmpose
+# Install mmpose
 mim install mmpose==1.0.0
 ```
 
-**注意**：这些命令会自动下载预编译的wheel包，避免编译C++/CUDA代码。
+**Note**: These commands will automatically download pre-compiled wheel packages, avoiding C++/CUDA code compilation.
 
-### 步骤3：下载RTMPose模型
+### Step 3: Download RTMPose Models
 
 ```bash
-# 下载推荐模型（rtmpose-s）
+# Download recommended model (rtmpose-s)
 python download_rtmpose_models.py --model rtmpose-s
 
-# 或下载所有模型
+# Or download all models
 python download_rtmpose_models.py --all
 ```
 
-### 步骤4：验证安装
+### Step 4: Verify Installation
 
 ```bash
-# 检查依赖版本
+# Check dependency versions
 python -c "import mmcv; print(f'mmcv: {mmcv.__version__}')"
 python -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
 python -c "import mmengine; print(f'mmengine: {mmengine.__version__}')"
 
-# 运行测试
+# Run test
 python test_quick.py --backend rtmpose
 ```
 
-### Jetson特殊说明
+### Jetson Special Notes
 
-Jetson设备可以使用相同的安装方法。如果遇到编译问题，可以尝试：
+Jetson devices can use the same installation method. If you encounter compilation issues, try:
 
 ```bash
-# 使用Jetson预编译的wheel（如果可用）
+# Use pre-compiled wheels for Jetson (if available)
 pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/jetpack/index.html
 ```
 
 ---
 
-## Windows安装（高级）
+## Windows Installation (Advanced)
 
-### ⚠️ 警告
+### ⚠️ Warning
 
-**MMPose在Windows上安装非常复杂**，主要问题：
+**MMPose installation on Windows is very complex**, main issues:
 
-1. **编译依赖**：需要Visual Studio 2019+和CUDA Toolkit
-2. **版本冲突**：mmcv与PyTorch/CUDA版本严格绑定
-3. **编译时间长**：首次安装可能需要30分钟+
-4. **失败率高**：编译错误频繁，难以调试
+1. **Compilation Dependencies**: Requires Visual Studio 2019+ and CUDA Toolkit
+2. **Version Conflicts**: mmcv is strictly bound to PyTorch/CUDA versions
+3. **Long Compilation Time**: First installation may take 30+ minutes
+4. **High Failure Rate**: Frequent compilation errors, difficult to debug
 
-### Windows用户的三个选择
+### Three Options for Windows Users
 
-#### 选项1：继续使用MediaPipe（推荐）
+#### Option 1: Continue Using MediaPipe (Recommended)
 
-**最简单的方案**，无需任何额外安装：
+**Simplest solution**, no additional installation needed:
 
 ```yaml
 # config/config_gpu.yaml
@@ -146,82 +146,82 @@ models:
     backend: mediapipe
 ```
 
-MediaPipe在Windows上工作完美，性能也足够日常开发使用。
+MediaPipe works perfectly on Windows with sufficient performance for daily development.
 
-#### 选项2：使用WSL2（推荐给高级用户）
+#### Option 2: Use WSL2 (Recommended for Advanced Users)
 
-在Windows上使用Linux子系统，享受Linux的便利：
+Use Linux subsystem on Windows, enjoy Linux convenience:
 
 ```bash
-# 在PowerShell（管理员）中启用WSL2
+# Enable WSL2 in PowerShell (Administrator)
 wsl --install
 
-# 重启后，在WSL2中安装
+# After reboot, install in WSL2
 wsl
 sudo apt update
 sudo apt install python3-pip
 
-# 然后按照Linux安装步骤进行
+# Then follow Linux installation steps
 pip install openmim
 mim install mmcv==2.0.0 mmpose==1.0.0
 ```
 
-**优点**：
-- ✅ 安装简单（与Linux相同）
-- ✅ 可以访问Windows文件系统
-- ✅ GPU加速可用（需要WSL2 + CUDA支持）
+**Advantages**:
+- ✅ Simple installation (same as Linux)
+- ✅ Access to Windows file system
+- ✅ GPU acceleration available (requires WSL2 + CUDA support)
 
-#### 选项3：硬核安装（仅供参考，不推荐）
+#### Option 3: Native Installation (For Reference Only, Not Recommended)
 
-如果你坚持要在原生Windows上安装：
+If you insist on installing on native Windows:
 
-**前置要求**：
-1. Visual Studio 2019或2022（需要C++桌面开发工具）
-2. CUDA Toolkit 11.8（需要与PyTorch版本匹配）
-3. PyTorch 2.0+（CUDA版本）
+**Prerequisites**:
+1. Visual Studio 2019 or 2022 (requires C++ desktop development tools)
+2. CUDA Toolkit 11.8 (must match PyTorch version)
+3. PyTorch 2.0+ (CUDA version)
 
 ```bash
-# 1. 安装编译工具
-# 下载并安装 Visual Studio Build Tools
+# 1. Install compilation tools
+# Download and install Visual Studio Build Tools
 # https://visualstudio.microsoft.com/downloads/
 
-# 2. 安装PyTorch（CUDA版本）
+# 2. Install PyTorch (CUDA version)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# 3. 尝试安装mmcv（可能失败）
+# 3. Try installing mmcv (may fail)
 pip install openmim
-mim install mmcv==2.0.0  # 可能需要编译30分钟+
+mim install mmcv==2.0.0  # May require 30+ minutes compilation
 
-# 4. 如果编译失败，尝试预编译版本
+# 4. If compilation fails, try pre-compiled version
 pip install mmcv -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html
 
-# 5. 安装mmpose
+# 5. Install mmpose
 mim install mmpose==1.0.0
 ```
 
-**常见错误**：
+**Common Errors**:
 
 ```
 ERROR: Cannot build mmcv
-  → 解决：检查Visual Studio是否正确安装
+  → Solution: Check if Visual Studio is correctly installed
 
 ERROR: CUDA version mismatch
-  → 解决：确保CUDA、PyTorch、mmcv版本匹配
+  → Solution: Ensure CUDA, PyTorch, mmcv versions match
 
 ERROR: cl.exe not found
-  → 解决：运行vcvars64.bat初始化编译环境
+  → Solution: Run vcvars64.bat to initialize compilation environment
 ```
 
-**如果遇到问题**，强烈建议：
-1. 使用WSL2
-2. 或继续使用MediaPipe
-3. 或直接部署到Jetson设备
+**If you encounter problems**, strongly recommended:
+1. Use WSL2
+2. Or continue using MediaPipe
+3. Or deploy directly to Jetson device
 
 ---
 
-## 验证安装
+## Verify Installation
 
-### 检查依赖
+### Check Dependencies
 
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}')"
@@ -230,7 +230,7 @@ python -c "import mmcv; print(f'mmcv: {mmcv.__version__}')"
 python -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
 ```
 
-**期望输出**：
+**Expected Output**:
 ```
 PyTorch: 2.0.0+cu118
 CUDA available: True
@@ -238,72 +238,72 @@ mmcv: 2.0.0
 mmpose: 1.0.0
 ```
 
-### 测试RTMPose
+### Test RTMPose
 
 ```bash
-# 快速测试
+# Quick test
 python test_quick.py --backend rtmpose
 
-# 完整测试
+# Full test
 python main.py --config config/config_gpu.yaml
 ```
 
-**期望结果**：
-- ✅ 模型加载成功
-- ✅ 推理时间 <20ms
-- ✅ 无错误信息
+**Expected Results**:
+- ✅ Model loads successfully
+- ✅ Inference time <20ms
+- ✅ No error messages
 
 ---
 
-## 常见问题
+## FAQ
 
-### Q1: mmcv安装失败，报编译错误
+### Q1: mmcv installation fails with compilation errors
 
-**A**: 使用mim安装而不是pip：
+**A**: Use mim install instead of pip:
 
 ```bash
 pip install openmim
-mim install mmcv==2.0.0  # mim会自动下载预编译包
+mim install mmcv==2.0.0  # mim automatically downloads pre-compiled packages
 ```
 
-如果仍然失败（Windows），建议使用WSL2或MediaPipe。
+If still failing (Windows), recommend using WSL2 or MediaPipe.
 
-### Q2: 提示"CUDA version mismatch"
+### Q2: "CUDA version mismatch" error
 
-**A**: 确保PyTorch、CUDA Toolkit、mmcv版本匹配：
+**A**: Ensure PyTorch, CUDA Toolkit, mmcv versions match:
 
 | PyTorch | CUDA Toolkit | mmcv |
 |---------|--------------|------|
 | 2.0.x | 11.8 | 2.0.0+cu118 |
 | 1.13.x | 11.7 | 1.7.1+cu117 |
 
-重新安装匹配版本：
+Reinstall matching versions:
 ```bash
-# 例如：PyTorch 2.0 + CUDA 11.8
+# Example: PyTorch 2.0 + CUDA 11.8
 pip install torch==2.0.0+cu118 --index-url https://download.pytorch.org/whl/cu118
 mim install mmcv==2.0.0
 ```
 
-### Q3: 模型文件下载失败
+### Q3: Model file download fails
 
-**A**: 尝试以下方法：
+**A**: Try the following methods:
 
 ```bash
-# 方法1：使用脚本下载
+# Method 1: Use download script
 python download_rtmpose_models.py --model rtmpose-s
 
-# 方法2：手动下载
-# 1. 访问 https://github.com/open-mmlab/mmpose/tree/main/projects/rtmpose
-# 2. 下载配置文件和权重文件
-# 3. 放到 models/rtmpose/ 目录
+# Method 2: Manual download
+# 1. Visit https://github.com/open-mmlab/mmpose/tree/main/projects/rtmpose
+# 2. Download config file and weight file
+# 3. Place in models/rtmpose/ directory
 
-# 方法3：使用mim下载
+# Method 3: Use mim download
 mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/
 ```
 
-### Q4: 运行时提示"config file not found"
+### Q4: Runtime error "config file not found"
 
-**A**: 检查配置文件路径：
+**A**: Check configuration file path:
 
 ```yaml
 # config/config_gpu.yaml
@@ -316,32 +316,32 @@ models:
     device: cuda:0
 ```
 
-确保文件存在：
+Ensure files exist:
 ```bash
 ls models/rtmpose/configs/
 ls models/rtmpose/*.pth
 ```
 
-### Q5: TensorRT优化不生效
+### Q5: TensorRT optimization not working
 
-**A**: TensorRT完整集成需要MMDeploy：
+**A**: Full TensorRT integration requires MMDeploy:
 
 ```bash
-# 安装MMDeploy（可选）
+# Install MMDeploy (optional)
 mim install mmdeploy
 
-# 或者只使用FP16优化（不需要MMDeploy）
-# 配置文件中：
+# Or just use FP16 optimization (doesn't require MMDeploy)
+# In config file:
 tensorrt:
   enabled: true
-  fp16_mode: true  # 自动使用PyTorch的half精度
+  fp16_mode: true  # Automatically uses PyTorch half precision
 ```
 
-当前实现会自动使用FP16加速（如果启用），无需完整的TensorRT转换。
+Current implementation automatically uses FP16 acceleration (if enabled), without requiring full TensorRT conversion.
 
-### Q6: Jetson上性能不如预期
+### Q6: Performance on Jetson not as expected
 
-**A**: 确保启用TensorRT优化：
+**A**: Ensure TensorRT optimization is enabled:
 
 ```yaml
 # config/config_jetson.yaml
@@ -353,52 +353,52 @@ models:
 
 tensorrt:
   enabled: true
-  fp16_mode: true  # Jetson推荐FP16
+  fp16_mode: true  # Recommended FP16 for Jetson
   workspace_size: 2048
 ```
 
-检查功耗模式：
+Check power mode:
 ```bash
-# 查看当前功耗模式
+# Check current power mode
 sudo nvpmodel -q
 
-# 切换到最高性能（25W）
+# Switch to maximum performance (25W)
 sudo nvpmodel -m 0
 ```
 
 ---
 
-## 总结
+## Summary
 
-### 推荐方案
+### Recommended Solutions
 
-**开发测试**（Windows/macOS）：
+**Development/Testing** (Windows/macOS):
 ```
-使用 MediaPipe (backend: mediapipe)
-→ 安装简单，跨平台兼容
-```
-
-**生产部署**（Linux/Jetson）：
-```
-使用 RTMPose (backend: rtmpose)
-→ GPU加速，性能更好
+Use MediaPipe (backend: mediapipe)
+→ Simple installation, cross-platform compatible
 ```
 
-### 快速决策
+**Production Deployment** (Linux/Jetson):
+```
+Use RTMPose (backend: rtmpose)
+→ GPU acceleration, better performance
+```
+
+### Quick Decision
 
 ```
-你的目标是什么？
+What is your goal?
 │
-├─ 快速开发测试
-│  └─ 使用 MediaPipe ✅（无需额外安装）
+├─ Quick development and testing
+│  └─ Use MediaPipe ✅ (no additional installation needed)
 │
-├─ 高性能部署
-│  ├─ Linux/Jetson → 安装 RTMPose ✅
-│  └─ Windows → 使用 WSL2 + RTMPose
+├─ High performance deployment
+│  ├─ Linux/Jetson → Install RTMPose ✅
+│  └─ Windows → Use WSL2 + RTMPose
 │
-└─ Windows原生开发
-   ├─ 轻度使用 → MediaPipe ✅（推荐）
-   └─ 必须GPU → WSL2 + RTMPose
+└─ Native Windows development
+   ├─ Light usage → MediaPipe ✅ (recommended)
+   └─ Must have GPU → WSL2 + RTMPose
 ```
 
-如有其他问题，请提交Issue或查看[MMPose官方文档](https://mmpose.readthedocs.io/)。
+For other questions, please submit an Issue or check the [MMPose official documentation](https://mmpose.readthedocs.io/).
