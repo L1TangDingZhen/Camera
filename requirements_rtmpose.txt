@@ -1,0 +1,64 @@
+# RTMPose 可选依赖
+#
+# ⚠️ 警告：以下依赖在Windows上安装复杂，建议在Linux/Jetson上使用
+#
+# Windows用户建议：
+#   1. 继续使用MediaPipe (backend: mediapipe) - 简单稳定
+#   2. 使用WSL2/Linux虚拟机
+#   3. 直接部署到Jetson设备（生产环境）
+#
+# 安装说明：请参考 INSTALL_RTMPOSE.md
+
+# ============================================================
+# 方法1：使用OpenMIM安装（推荐）
+# ============================================================
+#
+# 步骤：
+# 1. pip install openmim
+# 2. mim install mmcv==2.0.0
+# 3. mim install mmengine==0.8.0
+# 4. mim install mmpose==1.0.0
+#
+# OpenMIM会自动处理版本兼容性，避免编译问题
+
+openmim>=0.3.9
+
+# ============================================================
+# 方法2：直接安装（高级用户）
+# ============================================================
+#
+# 注意：mmcv需要与PyTorch、CUDA版本严格匹配
+#
+# 对于CUDA 11.8 + PyTorch 2.0：
+# --extra-index-url https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html
+# mmcv==2.0.0
+# mmengine==0.8.0
+# mmpose==1.0.0
+
+# ============================================================
+# TensorRT支持（可选，Jetson推荐）
+# ============================================================
+#
+# Jetson设备通常预装了TensorRT
+# PC用户需要手动安装：
+#
+# 1. 下载TensorRT: https://developer.nvidia.com/tensorrt
+# 2. pip install tensorrt
+#
+# 完整TensorRT集成需要MMDeploy:
+# mim install mmdeploy
+
+# tensorrt>=8.5.0  # 取消注释以启用
+
+# ============================================================
+# 验证安装
+# ============================================================
+#
+# 安装完成后，运行以下命令验证：
+#
+# python -c "import mmcv; print(mmcv.__version__)"
+# python -c "import mmpose; print(mmpose.__version__)"
+# python -c "import mmengine; print(mmengine.__version__)"
+#
+# 然后下载模型：
+# python download_rtmpose_models.py --model rtmpose-s

@@ -15,15 +15,49 @@ models:
     confidence: 0.5
     iou: 0.45
 
+  # ========================================================================
+  # 姿态估计模型配置 - 模型切换位置
+  # ========================================================================
   pose:
-    backend: mediapipe  # 暂时用MediaPipe，后续可改成rtmpose
-    complexity: 1  # 1=Full（平衡），2太慢了（69ms）
-    device: cpu  # MediaPipe不支持GPU，用CPU
+    # ===== 选项1：MediaPipe（默认，推荐用于开发测试） =====
+    backend: mediapipe  # 👈 改这里切换模型！
+    complexity: 1       # 0=Lite, 1=Full, 2=Heavy
+    device: cpu         # MediaPipe只支持CPU
     confidence: 0.3
-    # 注意：如果安装了mmpose，可以改成：
-    # backend: rtmpose
-    # model: rtmpose_s.pth
-    # device: cuda:0
+
+    # 特点：
+    #   - 速度: ~40-50ms (CPU)
+    #   - 精度: AP ~67%
+    #   - 优点: 安装简单，跨平台兼容好
+    #   - 适用: Windows开发、快速测试
+    # ========================================================
+
+    # ===== 选项2：RTMPose（推荐用于生产部署） =====
+    # 取消下面的注释并注释掉上面的MediaPipe配置以启用RTMPose
+    #
+    # backend: rtmpose  # 👈 改成这个！
+    # model: rtmpose-s  # 可选: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
+    # config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
+    # checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
+    # device: cuda:0    # RTMPose需要GPU
+    # confidence: 0.3
+    #
+    # 特点：
+    #   - 速度: ~12ms (GPU + FP16)
+    #   - 精度: AP ~68.5%
+    #   - 优点: GPU加速，精度更高，支持TensorRT
+    #   - 适用: Jetson部署、GPU生产环境
+    #
+    # 安装说明：
+    #   1. pip install openmim
+    #   2. mim install mmcv==2.0.0 mmpose==1.0.0
+    #   3. python download_rtmpose_models.py --model rtmpose-s
+    #   4. 详细说明请参考：INSTALL_RTMPOSE.md
+    #
+    # ⚠️ Windows用户注意：
+    #   - MMPose在Windows上安装复杂，建议使用WSL2或继续使用MediaPipe
+    #   - 详见 INSTALL_RTMPOSE.md
+    # ========================================================
 
 camera:
   source: 0  # 0=默认摄像头, 或视频文件路径
