@@ -110,6 +110,106 @@ behavior:
     night_start: "22:00"
     night_end: "06:00"
 
+  # ========================================================================
+  # 分类器配置 - 姿态分类器切换位置
+  # ========================================================================
+  classifier:
+    # ===== 选项1：SVM分类器（默认，推荐） =====
+    type: svm  # 👈 改这里切换分类器！
+    path: models/pose_classifier_svm.pkl
+    device: cpu
+
+    # 特点：
+    #   - 速度: ~1ms (CPU)
+    #   - 精度: 90-95% (基于训练数据)
+    #   - 优点: 快速、稳定、无需GPU
+    #   - 适用: 生产环境、实时性要求高
+    #
+    # 训练方法：
+    #   python train_svm.py --data training_data
+    # ========================================================
+
+    # ===== 选项2：深度学习分类器 =====
+    # 取消下面的注释以启用深度学习分类器
+    #
+    # type: deep_learning  # 👈 改成这个！
+    # model_type: mlp      # 可选: mlp, lstm, transformer
+    # path: models/pose_classifier_mlp.pth
+    # device: cuda:0       # 或 cpu
+    #
+    # 特点：
+    #   - MLP: ~1ms, 适合单帧分类
+    #   - LSTM: ~5ms, 适合序列数据（更准确）
+    #   - Transformer: ~10ms, 最高精度
+    #   - 精度: 通常比SVM高2-5%
+    #
+    # 训练方法：
+    #   python train_dl.py --model mlp --epochs 100 --device cuda
+    # ========================================================
+
+    # ===== 选项3：RL Ensemble（多模型融合） =====
+    # 取消下面的注释以启用RL Ensemble
+    #
+    # type: rl_ensemble  # 👈 改成这个！
+    # device: cuda:0
+    # agent_path: models/ensemble_agent.pt
+    #
+    # # 基础分类器列表（至少2个）
+    # ensemble_models:
+    #   - type: svm
+    #     path: models/pose_classifier_svm.pkl
+    #
+    #   - type: deep_learning
+    #     model_type: mlp
+    #     path: models/pose_classifier_mlp.pth
+    #     device: cuda:0
+    #
+    #   - type: deep_learning
+    #     model_type: lstm
+    #     path: models/pose_classifier_lstm.pth
+    #     device: cuda:0
+    #
+    # 特点：
+    #   - 动态加权融合多个分类器
+    #   - 根据环境自适应调整权重
+    #   - 精度: 通常比单一模型高3-8%
+    #   - 适用: 精度优先、多样化环境
+    #
+    # 训练方法：
+    #   python train_ensemble.py --models svm,mlp,lstm --epochs 100
+    # ========================================================
+
+  # ========================================================================
+  # 决策策略配置 - 决策策略切换位置
+  # ========================================================================
+  decision:
+    # ===== 选项1：简单防抖（默认） =====
+    type: simple  # 👈 改这里切换决策策略！
+
+    # 特点：
+    #   - 基于时间的简单防抖
+    #   - 连续N秒稳定后才输出状态
+    #   - 速度快、逻辑简单
+    #   - 适用: 大多数场景
+    # ========================================================
+
+    # ===== 选项2：RL自适应决策 =====
+    # 取消下面的注释以启用RL决策
+    #
+    # type: rl  # 👈 改成这个！
+    # agent_path: models/decision_agent.pt
+    # device: cuda:0
+    #
+    # 特点：
+    #   - 学习何时输出分类结果
+    #   - 动作: classify_now, wait, verify, reject
+    #   - 减少误报，提高决策质量
+    #   - 适用: 复杂环境、精度优先
+    #
+    # 训练方法：
+    #   python train_decision_agent.py --classifier svm --epochs 100
+    # ========================================================
+
 storage:
   database: "data/database.db"
   backup_interval: 86400  # 秒，每天备份
