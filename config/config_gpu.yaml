@@ -10,7 +10,7 @@ hardware:
 
 models:
   person:
-    model: yolov8m.pt  # Medium model, higher accuracy (can change back to yolov8s.pt if performance insufficient)
+    model: models/yolov8n.engine  # TensorRT FP16 engine - 10x faster than .pt
     device: cuda:0
     confidence: 0.5
     iou: 0.45
@@ -20,10 +20,10 @@ models:
   # ========================================================================
   pose:
     # ===== Option 1: MediaPipe (Default, recommended for development/testing) =====
-    backend: mediapipe  # 👈 Change this to switch models!
-    complexity: 1       # 0=Lite, 1=Full, 2=Heavy
-    device: cpu         # MediaPipe only supports CPU
-    confidence: 0.3
+    # backend: mediapipe  # 👈 Change this to switch models!
+    # complexity: 1       # 0=Lite, 1=Full, 2=Heavy
+    # device: cpu         # MediaPipe only supports CPU
+    # confidence: 0.3
 
     # Features:
     #   - Speed: ~40-50ms (CPU)
@@ -33,19 +33,28 @@ models:
     # ========================================================
 
     # ===== Option 2: RTMPose (Recommended for production deployment) =====
-    # Uncomment lines below and comment out MediaPipe config above to enable RTMPose
-    #
-    # backend: rtmpose  # 👈 Change to this!
-    # model: rtmpose-s  # Options: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
-    # config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
+    # ✓ TensorRT Engine (FP16) - Fixed BGR preprocessing
+    backend: rtmpose
+    model: rtmpose-s  # Options: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
+    config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
+    # Stage 3: TensorRT engine (BGR fixed!)
+    # checkpoint: models/rtmpose/rtmpose-s.engine
+    # Stage 1: PyTorch FP32 (for comparison)
+    checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
+    # Stage 1: PyTorch FP32 (fallback)
     # checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
-    # device: cuda:0    # RTMPose requires GPU
-    # confidence: 0.3
+    device: cuda:0    # RTMPose requires GPU
+    confidence: 0.3
+    # TensorRT configuration
+    tensorrt:
+      enabled: false  # Not used when loading .engine file directly
+      fp16_mode: false
+      workspace_size: 4096
     #
     # Features:
-    #   - Speed: ~12ms (GPU + FP16)
+    #   - Speed: ~1.4ms (TensorRT FP16) - 35x faster than PyTorch!
     #   - Accuracy: AP ~68.5%
-    #   - Pros: GPU acceleration, higher accuracy, TensorRT support
+    #   - Pros: Ultimate GPU performance, minimal latency
     #   - Use for: Jetson deployment, GPU production environments
     #
     # Installation:
@@ -60,15 +69,15 @@ models:
     # ========================================================
 
 camera:
-  source: 0  # 0=default camera, or video file path
+  source: 0  # video0是彩色摄像头
   fps: 30  # GPU mode supports high frame rate
-  resolution: [1920, 1080]  # Full HD - RTX 4070 can handle
+  resolution: [640, 480]  # VGA - 摄像头可达30FPS (720p只有10FPS)
   flip: false
   rotation: 0
 
 inference:
   skip_frames: 0
-  detection_interval: 1  # GPU mode detects every frame (no skipping)
+  detection_interval: 2  # GPU mode detects every frame (no skipping)
   max_buffer_size: 150
 
 roi:
@@ -115,9 +124,9 @@ behavior:
   # ========================================================================
   classifier:
     # ===== Option 1: SVM Classifier (Default, recommended) =====
-    type: svm  # 👈 Change this to switch classifier!
-    path: models/pose_classifier_svm.pkl
-    device: cpu
+    # type: svm  # 👈 Change this to switch classifier!
+    # path: models/pose_classifier_svm.pkl
+    # device: cpu
 
     # Features:
     #   - Speed: ~1ms (CPU)
@@ -132,10 +141,10 @@ behavior:
     # ===== Option 2: Deep Learning Classifier =====
     # Uncomment lines below to enable deep learning classifier
     #
-    # type: deep_learning  # 👈 Change to this!
-    # model_type: mlp      # Options: mlp, lstm, transformer
-    # path: models/pose_classifier_mlp.pth
-    # device: cuda:0       # or cpu
+    type: deep_learning  # 👈 Change to this!
+    model_type: lstm      # Options: mlp, lstm, transformer
+    path: models/pose_classifier_lstm.pth
+    device: cuda:0       # or cpu
     #
     # Features:
     #   - MLP: ~1ms, suitable for single-frame classification
@@ -184,7 +193,7 @@ behavior:
   # ========================================================================
   decision:
     # ===== Option 1: Simple Debouncing (Default) =====
-    type: simple  # 👈 Change this to switch decision strategy!
+    # type: simple  # 👈 Change this to switch decision strategy!
 
     # Features:
     #   - Time-based simple debouncing
@@ -196,10 +205,10 @@ behavior:
     # ===== Option 2: RL Adaptive Decision =====
     # Uncomment lines below to enable RL decision
     #
-    # type: rl  # 👈 Change to this!
-    # agent_path: models/decision_agent.pt
-    # device: cuda:0
-    #
+    type: rl  # 👈 Change to this!
+    agent_path: models/decision_agent.pt
+    device: cuda:0
+
     # Features:
     #   - Learns when to output classification results
     #   - Actions: classify_now, wait, verify, reject
@@ -207,7 +216,7 @@ behavior:
     #   - Use for: Complex environments, accuracy priority
     #
     # Training:
-    #   python train_decision_agent.py --classifier svm --epochs 100
+    #   python train_decision_agent.py --classifier rule_based --epochs 100
     # ========================================================
 
 storage:
@@ -236,6 +245,12 @@ web:
 
 # TensorRT Optimization (Jetson)
 tensorrt:
-  enabled: false  # false for PC development, change to true on Jetson
+  enabled: true  # false for PC development, change to true on Jetson
   fp16_mode: true
   workspace_size: 4096  # MB
+
+
+
+# yolo v8 (vidoeo) + rtmpose (dection) + lstm (classifier) + rl (decision) = 16 fps (empty) 10 fps (human in frame) on jetson nano
+# yolo v8 (tensor rt) + rtmpose (dection) + lstm (classifier) + rl (decision) = yolo v8 (pytorch 44ms -> tensort 24ms) 14 fps 
+# yolo v8 (tensor rt) + rtmpose (tensor rt) + lstm (classifier) + rl (decision) = yolo v8 (pytorch 44ms -> tensort 24ms) + rtmpose (dection 67ms -> tensor rt 30ms) 14 fps 

@@ -22,6 +22,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from typing import Tuple, List
 
+# Import SVM classifier for feature extraction
+from src.classifiers.pose_classifier import PoseClassifierSVM
+
 
 class PoseClassifierTrainer:
     """姿态分类器训练器"""
@@ -33,6 +36,8 @@ class PoseClassifierTrainer:
         # 标签映射会在 load_data 中动态创建
         self.label_mapping = {}
         self.reverse_mapping = {}
+        # Create temporary classifier instance for feature extraction
+        self.feature_extractor = PoseClassifierSVM()
 
     def load_data(self) -> Tuple[np.ndarray, np.ndarray]:
         """加载训练数据
@@ -63,7 +68,21 @@ class PoseClassifierTrainer:
             print(f"[INFO] 加载 {pose_label}: {len(samples)} 个样本")
 
             for sample in samples:
-                all_features.append(sample['features'])
+                raw_features = np.array(sample['features'])
+
+                # Handle 68-dim flattened keypoints: reshape to (17,4) then extract 58-dim features
+                if len(raw_features) == 68:
+                    features_58 = self.feature_extractor.extract_features(raw_features)
+                    if features_58 is None:
+                        continue  # Skip invalid samples
+                    all_features.append(features_58)
+                # Handle legacy 58-dim features
+                elif len(raw_features) == 58:
+                    all_features.append(raw_features)
+                else:
+                    print(f"[WARN] Unexpected feature dimension: {len(raw_features)}, skipping sample")
+                    continue
+
                 all_labels.append(self.label_mapping[pose_label])
 
         # 创建反向映射

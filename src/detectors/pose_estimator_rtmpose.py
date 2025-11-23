@@ -78,12 +78,26 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         # TensorRT配置
         self.tensorrt_config = config.get('tensorrt', {})
         self.use_tensorrt = self.tensorrt_config.get('enabled', False)
+        self.use_fp16 = False  # Will be set by _apply_tensorrt_optimization
+        self.use_tensorrt_engine = False  # Flag for native TensorRT engine
 
         # 自动构建config和checkpoint路径
         if self.config_file is None or self.checkpoint is None:
             self.config_file, self.checkpoint = self._get_model_paths(self.model_name)
 
-        # 加载模型
+        # 初始化推理时间记录
+        self.inference_times = []
+
+        # 检查是否使用TensorRT引擎文件(.engine)
+        if self.checkpoint.endswith('.engine'):
+            print(f"[RTMPose] 检测到TensorRT引擎文件")
+            print(f"[RTMPose] 正在加载TensorRT引擎: {self.checkpoint}")
+            self.use_tensorrt_engine = True
+            self._load_tensorrt_engine()
+            print(f"[RTMPose] TensorRT引擎加载成功 ✓")
+            return
+
+        # 加载PyTorch模型
         print(f"[RTMPose] 初始化姿态估计器...")
         print(f"[RTMPose]   模型: {self.model_name}")
         print(f"[RTMPose]   配置文件: {self.config_file}")
@@ -98,7 +112,7 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 device=self.device
             )
 
-            # TensorRT优化
+            # TensorRT优化 (PyTorch FP16)
             if self.use_tensorrt:
                 print(f"[RTMPose] 正在应用TensorRT优化...")
                 self.model = self._apply_tensorrt_optimization(self.model)
@@ -122,6 +136,25 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             raise
 
         self.inference_times = []
+
+    def _load_tensorrt_engine(self):
+        """Load TensorRT engine for inference"""
+        try:
+            from .tensorrt_wrapper import TensorRTRTMPose
+            self.tensorrt_model = TensorRTRTMPose(
+                engine_path=self.checkpoint,
+                device=self.device
+            )
+        except ImportError as e:
+            raise ImportError(
+                f"Failed to import TensorRT wrapper: {e}\n"
+                f"Please ensure pycuda is installed: pip install pycuda"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load TensorRT engine: {e}\n"
+                f"Engine file: {self.checkpoint}"
+            )
 
     def _get_model_paths(self, model_name: str) -> tuple:
         """
@@ -213,6 +246,7 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 if fp16_mode and torch.cuda.is_available():
                     print(f"[RTMPose] 使用FP16精度")
                     model = model.half()
+                    self.use_fp16 = True  # Set FP16 flag
 
                 return model
 
@@ -221,6 +255,7 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 model.eval()
                 if fp16_mode and torch.cuda.is_available():
                     model = model.half()
+                    self.use_fp16 = True  # Set FP16 flag
                 return model
 
         except Exception as e:
@@ -243,6 +278,25 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         start_time = time.time()
 
         try:
+            # TensorRT引擎推理
+            if self.use_tensorrt_engine:
+                if bbox is None:
+                    # Use full image as bbox
+                    h, w = frame.shape[:2]
+                    bbox = np.array([0, 0, w, h, 1.0])
+
+                # Run TensorRT inference
+                keypoints = self.tensorrt_model(frame, bbox)
+
+                # Record inference time
+                inference_time = time.time() - start_time
+                self.inference_times.append(inference_time)
+                if len(self.inference_times) > 100:
+                    self.inference_times.pop(0)
+
+                return keypoints
+
+            # PyTorch model inference
             # 准备bbox格式
             if bbox is not None:
                 # MMPose需要bbox格式: [x1, y1, x2, y2, score]
@@ -252,12 +306,20 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 h, w = frame.shape[:2]
                 bboxes = np.array([[0, 0, w, h, 1.0]])
 
-            # 推理
-            results = self.inference_topdown(
-                self.model,
-                frame,
-                bboxes=bboxes
-            )
+            # 推理 (use autocast for FP16 compatibility)
+            if self.use_fp16:
+                with torch.amp.autocast('cuda', dtype=torch.float16):
+                    results = self.inference_topdown(
+                        self.model,
+                        frame,
+                        bboxes=bboxes
+                    )
+            else:
+                results = self.inference_topdown(
+                    self.model,
+                    frame,
+                    bboxes=bboxes
+                )
 
             # 记录推理时间
             inference_time = time.time() - start_time
@@ -280,8 +342,16 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             if len(pred_instances.keypoints) == 0:
                 return None
 
-            keypoints = pred_instances.keypoints[0]  # (17, 2)
-            scores = pred_instances.keypoint_scores[0]  # (17,)
+            keypoints = pred_instances.keypoints[0]  # Shape可能是(17, 2)或(1, 17, 2)
+            scores = pred_instances.keypoint_scores[0]  # Shape可能是(17,)或(1, 17)
+
+            # 确保keypoints是(17, 2)
+            if len(keypoints.shape) == 3:
+                keypoints = keypoints[0]  # (1, 17, 2) -> (17, 2)
+
+            # 确保scores是(17,)
+            if len(scores.shape) == 2:
+                scores = scores[0]  # (1, 17) -> (17,)
 
             # 合并为 (17, 3) [x, y, confidence]
             keypoints_with_scores = np.concatenate([

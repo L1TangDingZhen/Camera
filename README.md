@@ -118,13 +118,13 @@ Stage 3: Edge Deployment (Jetson Orin Nano Super)
 
 ```bash
 # Clone the repository
-git clone <your-repo>
+git clone https://github.com/L1TangDingZhen/Camera.git
 cd Camera
 
 # Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate  # Windows
+python3 -m venv Camera
+source Camera/bin/activate  # Linux/Mac
+# Camera\Scripts\activate  # Windows
 
 # Install dependencies
 pip install -r requirements.txt

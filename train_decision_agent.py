@@ -79,6 +79,9 @@ def load_data(data_dir: str) -> List[Tuple[np.ndarray, str]]:
                 keypoints = np.array(sample['keypoints_sequence'][-1])
             elif 'keypoints' in sample:
                 keypoints = np.array(sample['keypoints'])
+            elif 'features' in sample:
+                # 兼容 collect_data.py 生成的格式
+                keypoints = np.array(sample['features'])
             else:
                 continue
 
@@ -134,7 +137,11 @@ def generate_training_episodes(classifier, data: List[Tuple], episode_length: in
 
             for t, landmarks in enumerate(episode_landmarks):
                 # 分类器预测
-                probs = classifier.predict_proba(landmarks)
+                # landmarks 是特征向量（58维），使用 predict_proba_from_features
+                if hasattr(classifier, 'predict_proba_from_features'):
+                    probs = classifier.predict_proba_from_features(landmarks)
+                else:
+                    probs = classifier.predict_proba(landmarks)
 
                 if probs is None:
                     continue

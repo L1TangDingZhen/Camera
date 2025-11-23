@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Life Tracker - 行为监测系统主程序
-支持三阶段部署: PC -> X390 -> Jetson
+Life Tracker
+
 """
 
 import argparse
@@ -60,15 +60,40 @@ class LifeTracker:
         # 5. 初始化摄像头
         print("[初始化] 打开摄像头...")
         camera_config = self.config['camera']
-        self.cap = cv2.VideoCapture(camera_config['source'])
+        camera_source = camera_config['source']
+
+        # 如果配置的摄像头打不开，自动搜索可用摄像头
+        self.cap = cv2.VideoCapture(camera_source)
 
         if not self.cap.isOpened():
-            raise RuntimeError(f"无法打开摄像头: {camera_config['source']}")
+            print(f"[警告] 摄像头 {camera_source} 无法打开，自动搜索可用摄像头...")
+            found = False
+            for i in range(10):  # 尝试搜索 /dev/video0 到 /dev/video9
+                test_cap = cv2.VideoCapture(i)
+                if test_cap.isOpened():
+                    ret, frame = test_cap.read()
+                    if ret and frame is not None:
+                        print(f"[成功] 找到可用摄像头: /dev/video{i} (分辨率: {frame.shape[1]}x{frame.shape[0]})")
+                        self.cap = test_cap
+                        camera_source = i
+                        found = True
+                        break
+                    test_cap.release()
+
+            if not found:
+                raise RuntimeError(f"无法找到任何可用摄像头 (已尝试 /dev/video0-9)")
 
         # 设置摄像头参数
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
         self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])
+
+        # 打印实际使用的摄像头参数
+        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+        print(f"[摄像头] 设备: /dev/video{camera_source}")
+        print(f"[摄像头] 实际分辨率: {actual_width}x{actual_height} @ {actual_fps} FPS")
 
         # 运行参数
         self.show_visualization = True

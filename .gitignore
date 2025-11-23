@@ -92,3 +92,5 @@ FETCH_HEAD
 # Git tags (should not be in working directory)
 v*.*.*
 
+# Claude specific
+CLAUDE.md

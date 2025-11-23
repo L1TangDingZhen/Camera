@@ -357,6 +357,42 @@ class PoseClassifierDL:
             return None
         return max(probs, key=probs.get)
 
+    def predict_proba_from_features(self, features: np.ndarray) -> Optional[Dict[str, float]]:
+        """从特征向量直接预测概率（用于训练决策层）
+
+        Args:
+            features: (58,) 特征向量
+
+        Returns:
+            {'sitting': 0.75, 'standing': 0.20, 'lying': 0.05}
+        """
+        if not self.is_loaded:
+            return None
+
+        # 扩展到68维（DL模型期望68维）
+        if len(features) == 58:
+            features = np.pad(features, (0, 10), mode='constant')
+
+        features_tensor = torch.tensor(features, dtype=torch.float32)
+
+        with torch.no_grad():
+            if self.model_type == 'mlp':
+                # MLP: 单帧
+                features_tensor = features_tensor.unsqueeze(0).to(self.device)
+                logits = self.model(features_tensor)
+            else:
+                # LSTM/Transformer: 重复成序列
+                sequence = [features_tensor] * self.sequence_length
+                sequence_tensor = torch.stack(sequence).unsqueeze(0).to(self.device)
+                logits = self.model(sequence_tensor)
+
+            probs = F.softmax(logits, dim=1).cpu().numpy()[0]
+
+        return {
+            self.reverse_mapping[i]: float(probs[i])
+            for i in range(len(probs))
+        }
+
     def reset_sequence(self):
         """重置序列缓冲（用于新的视频片段）"""
         self.sequence_buffer.clear()

@@ -117,55 +117,102 @@ upgrade_pip() {
 install_pytorch() {
     print_info "Installing PyTorch for Jetson..."
 
-    # Check if PyTorch is already installed
-    if python -c "import torch" &> /dev/null; then
+    # Detect JetPack version
+    if [ -f /etc/nv_tegra_release ]; then
+        JETPACK_R=$(cat /etc/nv_tegra_release | grep -oP 'R\d+' | head -1)
+        JETPACK_VER=$(dpkg -l | grep nvidia-jetpack | awk '{print $3}' | cut -d'+' -f1)
+        print_info "Detected JetPack: $JETPACK_VER ($JETPACK_R)"
+    else
+        print_warning "Cannot detect JetPack version"
+    fi
+
+    # Check if PyTorch with CUDA is already installed
+    if python -c "import torch; assert torch.cuda.is_available()" &> /dev/null; then
         TORCH_VERSION=$(python -c "import torch; print(torch.__version__)")
-        print_warning "PyTorch already installed: $TORCH_VERSION"
+        print_success "PyTorch with CUDA already installed: $TORCH_VERSION"
         return
     fi
 
-    print_info "Downloading PyTorch wheel for Jetson..."
-    print_warning "This may take several minutes..."
-
-    # PyTorch 2.0 for JetPack 5.x
-    # Note: Update URL for your specific JetPack version
-    # Download from: https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
-
-    TORCH_WHEEL="torch-2.0.0+nv23.05-cp38-cp38-linux_aarch64.whl"
-    TORCH_URL="https://developer.download.nvidia.com/compute/redist/jp/v511/${TORCH_WHEEL}"
-
-    if [ ! -f "$TORCH_WHEEL" ]; then
-        wget "$TORCH_URL" || {
-            print_error "Failed to download PyTorch. Please download manually from:"
-            print_error "https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048"
-            exit 1
-        }
+    # Uninstall CPU version if present
+    if python -c "import torch" &> /dev/null; then
+        TORCH_VERSION=$(python -c "import torch; print(torch.__version__)")
+        print_warning "Found PyTorch $TORCH_VERSION without CUDA. Uninstalling..."
+        pip uninstall -y torch torchvision
     fi
 
-    pip install "$TORCH_WHEEL"
-    print_success "PyTorch installed"
+    print_info "Installing PyTorch for JetPack..."
+    print_warning "This may take several minutes..."
+
+    # Install numpy<2.0 (required for PyTorch compatibility)
+    print_info "Installing numpy<2.0..."
+    pip install "numpy<2.0"
+
+    # Select PyTorch version based on JetPack
+    # Compatibility table:
+    # JetPack 6.2.1 → CUDA 12.6 → PyTorch 2.8.0, torchvision 0.23.0
+    # JetPack 6.2   → CUDA 12.6 → PyTorch 2.6.0, torchvision 0.21.0
+    # JetPack 6.1   → CUDA 12.2 → PyTorch 2.5.0, torchvision 0.20.0
+
+    case $JETPACK_VER in
+        6.2.1*)
+            # JetPack 6.2.1
+            PYTORCH_VER="2.8.0"
+            TORCHVISION_VER="0.23.0"
+            CUDA_VER="cu126"
+            ;;
+        6.2*)
+            # JetPack 6.2
+            PYTORCH_VER="2.6.0"
+            TORCHVISION_VER="0.21.0"
+            CUDA_VER="cu126"
+            ;;
+        6.1*)
+            # JetPack 6.1
+            PYTORCH_VER="2.5.0"
+            TORCHVISION_VER="0.20.0"
+            CUDA_VER="cu122"
+            ;;
+        *)
+            # Default to latest for JetPack 6.x
+            print_warning "Unknown JetPack version, using default for JetPack 6.2.1"
+            PYTORCH_VER="2.8.0"
+            TORCHVISION_VER="0.23.0"
+            CUDA_VER="cu126"
+            ;;
+    esac
+
+    print_info "Installing PyTorch ${PYTORCH_VER} and torchvision ${TORCHVISION_VER}..."
+
+    # Install from Jetson AI Lab PyPI (official NVIDIA source for JetPack 6.x)
+    pip install torch==${PYTORCH_VER} torchvision==${TORCHVISION_VER} \
+        --index-url=https://pypi.jetson-ai-lab.io/jp6/${CUDA_VER} || {
+        print_error "Failed to install PyTorch from Jetson AI Lab."
+        print_error ""
+        print_error "Please install manually:"
+        print_error "  pip install torch==${PYTORCH_VER} torchvision==${TORCHVISION_VER} \\"
+        print_error "    --index-url=https://pypi.jetson-ai-lab.io/jp6/${CUDA_VER}"
+        print_error ""
+        print_error "Or visit: https://jetson-ai-lab.github.io/pytorch.html"
+        exit 1
+    }
+
+    print_success "PyTorch ${PYTORCH_VER} installed"
 }
 
 # Install torchvision for Jetson
 install_torchvision() {
-    print_info "Installing torchvision for Jetson..."
+    # torchvision is now installed together with PyTorch in install_pytorch()
+    # This function is kept for backward compatibility but does nothing
 
-    # Install dependencies
-    sudo apt-get install -y libjpeg-dev zlib1g-dev libpython3-dev libavcodec-dev libavformat-dev libswscale-dev
+    print_info "Checking torchvision installation..."
 
-    # Install torchvision from source (recommended for Jetson)
-    print_info "Building torchvision from source..."
-
-    git clone --branch v0.15.0 https://github.com/pytorch/vision torchvision_source
-    cd torchvision_source
-
-    export BUILD_VERSION=0.15.0
-    python setup.py install
-
-    cd ..
-    rm -rf torchvision_source
-
-    print_success "torchvision installed"
+    if python -c "import torchvision" &> /dev/null; then
+        TV_VERSION=$(python -c "import torchvision; print(torchvision.__version__)")
+        print_success "torchvision already installed: $TV_VERSION"
+    else
+        print_warning "torchvision not found. It should have been installed with PyTorch."
+        print_warning "Please run install_pytorch() or install manually."
+    fi
 }
 
 # Install Python dependencies
@@ -292,8 +339,8 @@ main() {
     upgrade_pip
 
     # Install frameworks
-    install_pytorch
-    install_torchvision
+    install_pytorch  # 自动检测JetPack版本并安装对应的PyTorch
+    install_torchvision  # 验证torchvision安装
     install_python_deps
 
     # Setup project

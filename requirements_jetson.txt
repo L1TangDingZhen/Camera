@@ -23,7 +23,7 @@ mediapipe>=0.10.0
 # If you encounter issues, uninstall opencv-python and use system opencv
 opencv-python>=4.8.0
 opencv-contrib-python>=4.8.0
-numpy>=1.24.0
+numpy>=1.24.0,<2.0
 pillow>=10.0.0
 
 # Data Processing

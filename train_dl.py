@@ -101,10 +101,9 @@ def load_data_from_json(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
             # 或者有'keypoints'字段（17, 4）
             if 'features' in sample:
                 features = np.array(sample['features'])
-                # 如果是57维，需要扩展到68维
-                if len(features) == 57:
-                    # 补0到68维（这是临时方案，理想情况应该重新提取特征）
-                    features = np.pad(features, (0, 11), mode='constant')
+                # Auto-pad to 68 dims if needed
+                if len(features) < 68:
+                    features = np.pad(features, (0, 68 - len(features)), mode='constant')
             elif 'keypoints_sequence' in sample:
                 # 取序列的最后一帧
                 keypoints = np.array(sample['keypoints_sequence'][-1])  # (17, 4)

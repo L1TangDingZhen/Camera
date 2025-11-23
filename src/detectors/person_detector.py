@@ -38,13 +38,18 @@ class PersonDetector(DetectorInterface):
 
         try:
             self.model = YOLO(self.model_path)
-            # 设置模型参数
-            if hasattr(self.model, 'to'):
-                self.model.to(self.device)
 
-            # 预热
+            # Check if model is TensorRT engine or PyTorch model
+            self.is_tensorrt = self.model_path.endswith('.engine')
+
+            # Only call .to() for PyTorch models, not for TensorRT engines
+            if not self.is_tensorrt:
+                if hasattr(self.model, 'to'):
+                    self.model.to(self.device)
+
+            # Warmup
             dummy_frame = np.zeros((640, 640, 3), dtype=np.uint8)
-            _ = self.model(dummy_frame, verbose=False)
+            _ = self.model(dummy_frame, verbose=False, device=self.device)
 
             print(f"[PersonDetector] 模型加载成功")
 

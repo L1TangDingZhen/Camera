@@ -52,15 +52,19 @@ class PoseClassifierSVM:
             self.is_loaded = False
 
     def extract_features(self, world_landmarks: np.ndarray) -> Optional[np.ndarray]:
-        """从3D world landmarks提取特征向量
+        """Extract feature vector from 3D world landmarks
 
         Args:
-            world_landmarks: (17, 4) [x, y, z, visibility]
+            world_landmarks: Either (17, 4) [x, y, z, visibility] or 68-dim flattened array
 
         Returns:
-            features: 特征向量（相对归一化的）
+            features: Feature vector (normalized)
         """
-        # 检查关键点可见性
+        # Support both (17,4) and 68-dim 1D array inputs
+        if world_landmarks.ndim == 1 and len(world_landmarks) == 68:
+            world_landmarks = world_landmarks.reshape(17, 4)
+
+        # Check keypoint visibility
         required_indices = [5, 6, 11, 12]  # 肩膀和臀部
         for idx in required_indices:
             if world_landmarks[idx][3] < 0.3:  # visibility < 0.3
@@ -158,6 +162,38 @@ class PoseClassifierSVM:
         probs = self.clf.predict_proba(features_scaled)[0]
 
         # 转换为字典
+        prob_dict = {}
+        for label_idx, prob in enumerate(probs):
+            label_name = self.reverse_mapping[label_idx]
+            prob_dict[label_name] = float(prob)
+
+        return prob_dict
+
+    def predict_proba_from_features(self, features: np.ndarray) -> Optional[Dict[str, float]]:
+        """Predict probability from feature vector (skip feature extraction if already 58-dim)
+
+        Args:
+            features: Either (58,) hand-crafted features or (68,) flattened keypoints
+
+        Returns:
+            probabilities: {'sitting': 0.75, 'standing': 0.20, 'lying': 0.05}
+        """
+        if not self.is_loaded:
+            return None
+
+        # If 68-dim raw keypoints, extract 58-dim hand-crafted features
+        if len(features) == 68:
+            features = self.extract_features(features)
+            if features is None:
+                return None
+
+        # Normalize
+        features_scaled = self.scaler.transform(features.reshape(1, -1))
+
+        # Predict probabilities
+        probs = self.clf.predict_proba(features_scaled)[0]
+
+        # Convert to dictionary
         prob_dict = {}
         for label_idx, prob in enumerate(probs):
             label_name = self.reverse_mapping[label_idx]
