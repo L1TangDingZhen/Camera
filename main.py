@@ -589,8 +589,8 @@ def main():
 
     parser.add_argument('--config', type=str,
                        help='配置文件路径（直接指定）')
-    parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'],
-                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson），默认cpu')
+    parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'], default='gpu',
+                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson），默认gpu，便于直接 `python main.py --mode gpu`')
     parser.add_argument('--no-vis', action='store_true',
                        help='不显示可视化窗口')
     parser.add_argument('--debug', action='store_true',

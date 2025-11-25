@@ -1,4 +1,6 @@
+# ===================================
 # Python
+# ===================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,76 +23,149 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# ===================================
+# Virtual Environments (CRITICAL - Do Not Push!)
+# ===================================
 venv/
 env/
 ENV/
 .venv
+Camera/
+mmdeploy_env/
+camera/
 
-# IDE
+# ===================================
+# IDE & Editors
+# ===================================
 .vscode/
 .idea/
 *.swp
-*.swo
+.swo
 *~
 .DS_Store
 
-# Models
+# ===================================
+# Models (Large Files)
+# ===================================
 models/*.pt
 models/*.pth
 models/*.onnx
 models/*.engine
+models/**/*.pt
+models/**/*.pth
+models/**/*.onnx
+models/**/*.engine
+models/**/mmdeploy_output*/
+models/**/mmdeploy_work*/
 !models/.gitkeep
 
-# Data
+# ===================================
+# Data & Databases
+# ===================================
 data/*.db
 data/*.db-journal
+data/*.npz
+data/my_training.npz
 data/backups/
+training_data/
 !data/.gitkeep
 
-# Logs
+# ===================================
+# Logs & Debug Files
+# ===================================
 logs/*.log
+*.log
+trt_*.log
+mmcv_install.log
+mmdeploy_export.log
+setup_log.txt
+tensorrt_conversion.log
 !logs/.gitkeep
 
-# Temporary files
+# ===================================
+# Office Document Lock Files & Temp Files
+# ===================================
+.~lock.*
+*.odt
+*.docx
+*.xlsx
+~$*
+
+# ===================================
+# Temporary & Cache Files
+# ===================================
 *.tmp
 *.bak
 *.cache
-
-# System
 .cache/
 .ipynb_checkpoints/
 
-# pytest
+# ===================================
+# Test Results & Benchmarks
+# ===================================
+benchmark_results.txt
+benchmark_*.txt
+
+# ===================================
+# Videos, Images, Screenshots (except docs)
+# ===================================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.jpg
+*.jpeg
+*.png
+*.gif
+!docs/**/*.png
+!docs/**/*.jpg
+
+# ===================================
+# Pytest & Coverage
+# ===================================
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Documentation
+# ===================================
+# Documentation Build
+# ===================================
 docs/_build/
 
-# Videos and images
-*.mp4
-*.avi
-*.mov
-*.jpg
-*.jpeg
-*.png
-!docs/*.png
-!docs/*.jpg
-# Training data and models (local only, not in git)
-data/*.npz
-data/my_training.npz
-training_data/
-models/*.pkl
-models/*.json
-*.pt
-models/*.pt
-camera/
+# ===================================
+# Git Artifacts
+# ===================================
 FETCH_HEAD
 
-# Git tags (should not be in working directory)
-v*.*.*
+# ===================================
+# Temporary/Debug Scripts (exclude from repo)
+# ===================================
+*_backup.py
+*_old.py
+test_*.py
+debug_*.py
+export_*.py
+convert_*.py
+diagnose_*.py
+inspect_*.py
+save_*.py
+check_*.py
+analyze_*.py
+compare_*.py
+benchmark_*.py
 
-# Claude specific
+# But keep important test files
+!test_quick.py
+!test_robustness.py
+!test_session_tracker.py
+
+# ===================================
+# Internal Documentation (not for public)
+# ===================================
+AGENTS.md
+GEMINI_SOLUTION.md
+TENSORRT_JOURNEY.md
+TENSORRT_STATUS.md
+THREE_SOLUTIONS_COMPARISON.md
 CLAUDE.md

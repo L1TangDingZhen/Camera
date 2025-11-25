@@ -28,6 +28,10 @@ class PersonDetector(DetectorInterface):
         self.confidence = config.get('confidence', 0.5)
         self.iou = config.get('iou', 0.45)
         self.device = config.get('device', 'cpu')
+        # 可选的 bbox 平滑与扩张配置
+        self.smooth_alpha = config.get('smooth_alpha', 0.0)  # 0 表示不平滑
+        self.expand_ratio = config.get('expand_ratio', 1.0)  # 1 表示不扩张
+        self._last_bbox = None
 
         # 性能统计
         self.inference_times = []
@@ -100,7 +104,29 @@ class PersonDetector(DetectorInterface):
             x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
             confidence = box.conf[0].cpu().numpy()
 
-            return np.array([x1, y1, x2, y2, confidence], dtype=np.float32)
+            bbox = np.array([x1, y1, x2, y2, confidence], dtype=np.float32)
+
+            # 平滑 bbox（指数滑动）
+            if self.smooth_alpha > 0 and self._last_bbox is not None:
+                bbox[:4] = self.smooth_alpha * bbox[:4] + (1 - self.smooth_alpha) * self._last_bbox[:4]
+                bbox[4] = self.smooth_alpha * bbox[4] + (1 - self.smooth_alpha) * self._last_bbox[4]
+
+            # 扩张 bbox
+            if self.expand_ratio != 1.0:
+                cx = (bbox[0] + bbox[2]) / 2
+                cy = (bbox[1] + bbox[3]) / 2
+                w = (bbox[2] - bbox[0]) * self.expand_ratio
+                h = (bbox[3] - bbox[1]) * self.expand_ratio
+                bbox = np.array([
+                    max(0.0, cx - w / 2),
+                    max(0.0, cy - h / 2),
+                    cx + w / 2,
+                    cy + h / 2,
+                    bbox[4]
+                ], dtype=np.float32)
+
+            self._last_bbox = bbox
+            return bbox
 
         except Exception as e:
             print(f"[PersonDetector] 检测失败: {e}")

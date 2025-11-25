@@ -45,7 +45,40 @@ class RTMPoseEstimator(PoseEstimatorInterface):
     def __init__(self, config: dict):
         super().__init__(config)
 
-        # 检查依赖
+        # 配置参数
+        self.model_name = config.get('model', 'rtmpose-s')  # rtmpose-tiny/s/m/l
+        self.config_file = config.get('config_file', None)
+        self.checkpoint = config.get('checkpoint', None)
+        self.device = config.get('device', 'cuda:0')
+        self.confidence = config.get('confidence', 0.3)
+        # 关键点平滑与置信度过滤
+        self.keypoint_smooth_alpha = config.get('keypoint_smooth_alpha', 0.0)  # 0 = 不平滑
+        self.keypoint_min_conf = config.get('keypoint_min_conf', 0.3)
+        self._last_keypoints: Optional[np.ndarray] = None
+
+        # TensorRT配置
+        self.tensorrt_config = config.get('tensorrt', {})
+        self.use_tensorrt = self.tensorrt_config.get('enabled', False)
+        self.use_fp16 = False  # Will be set by _apply_tensorrt_optimization
+        self.use_tensorrt_engine = False  # Flag for native TensorRT engine
+
+        # 自动构建config和checkpoint路径
+        if self.config_file is None or self.checkpoint is None:
+            self.config_file, self.checkpoint = self._get_model_paths(self.model_name)
+
+        # 初始化推理时间记录
+        self.inference_times = []
+
+        # 检查是否使用TensorRT引擎文件(.engine) - 优先检查，避免导入mmpose
+        if self.checkpoint.endswith('.engine'):
+            print(f"[RTMPose] 检测到TensorRT引擎文件")
+            print(f"[RTMPose] 正在加载TensorRT引擎: {self.checkpoint}")
+            self.use_tensorrt_engine = True
+            self._load_tensorrt_engine()
+            print(f"[RTMPose] TensorRT引擎加载成功 ✓")
+            return
+
+        # 只有非TensorRT引擎模式才需要mmpose
         try:
             from mmpose.apis import init_model, inference_topdown
             from mmpose.structures import merge_data_samples
@@ -67,35 +100,6 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         self.init_model = init_model
         self.inference_topdown = inference_topdown
         self.merge_data_samples = merge_data_samples
-
-        # 配置参数
-        self.model_name = config.get('model', 'rtmpose-s')  # rtmpose-tiny/s/m/l
-        self.config_file = config.get('config_file', None)
-        self.checkpoint = config.get('checkpoint', None)
-        self.device = config.get('device', 'cuda:0')
-        self.confidence = config.get('confidence', 0.3)
-
-        # TensorRT配置
-        self.tensorrt_config = config.get('tensorrt', {})
-        self.use_tensorrt = self.tensorrt_config.get('enabled', False)
-        self.use_fp16 = False  # Will be set by _apply_tensorrt_optimization
-        self.use_tensorrt_engine = False  # Flag for native TensorRT engine
-
-        # 自动构建config和checkpoint路径
-        if self.config_file is None or self.checkpoint is None:
-            self.config_file, self.checkpoint = self._get_model_paths(self.model_name)
-
-        # 初始化推理时间记录
-        self.inference_times = []
-
-        # 检查是否使用TensorRT引擎文件(.engine)
-        if self.checkpoint.endswith('.engine'):
-            print(f"[RTMPose] 检测到TensorRT引擎文件")
-            print(f"[RTMPose] 正在加载TensorRT引擎: {self.checkpoint}")
-            self.use_tensorrt_engine = True
-            self._load_tensorrt_engine()
-            print(f"[RTMPose] TensorRT引擎加载成功 ✓")
-            return
 
         # 加载PyTorch模型
         print(f"[RTMPose] 初始化姿态估计器...")
@@ -138,13 +142,21 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         self.inference_times = []
 
     def _load_tensorrt_engine(self):
-        """Load TensorRT engine for inference"""
+        """Load standalone TensorRT engine (no MMPose dependency)"""
         try:
+            # Use standalone TensorRT wrapper
             from .tensorrt_wrapper import TensorRTRTMPose
-            self.tensorrt_model = TensorRTRTMPose(
+
+            print(f"[RTMPose] 使用standalone TensorRT模式（无需MMPose）")
+
+            # Create TensorRT model
+            self.trt_model = TensorRTRTMPose(
                 engine_path=self.checkpoint,
                 device=self.device
             )
+
+            print(f"[RTMPose] Standalone TensorRT引擎已加载")
+
         except ImportError as e:
             raise ImportError(
                 f"Failed to import TensorRT wrapper: {e}\n"
@@ -278,15 +290,18 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         start_time = time.time()
 
         try:
-            # TensorRT引擎推理
+            # Standalone TensorRT inference (no MMPose dependency)
             if self.use_tensorrt_engine:
+                # Use standalone TensorRT wrapper
                 if bbox is None:
-                    # Use full image as bbox
                     h, w = frame.shape[:2]
                     bbox = np.array([0, 0, w, h, 1.0])
 
                 # Run TensorRT inference
-                keypoints = self.tensorrt_model(frame, bbox)
+                keypoints = self.trt_model(frame, bbox)
+
+                # 可选关键点平滑
+                keypoints = self._apply_keypoint_smoothing(keypoints)
 
                 # Record inference time
                 inference_time = time.time() - start_time
@@ -299,12 +314,12 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             # PyTorch model inference
             # 准备bbox格式
             if bbox is not None:
-                # MMPose需要bbox格式: [x1, y1, x2, y2, score]
-                bboxes = np.array([[bbox[0], bbox[1], bbox[2], bbox[3], bbox[4]]])
+                # MMPose需要bbox格式: [[x1, y1, x2, y2]] (2D array without score)
+                bboxes = np.array([[bbox[0], bbox[1], bbox[2], bbox[3]]])
             else:
                 # 全图检测
                 h, w = frame.shape[:2]
-                bboxes = np.array([[0, 0, w, h, 1.0]])
+                bboxes = np.array([[0, 0, w, h]])
 
             # 推理 (use autocast for FP16 compatibility)
             if self.use_fp16:
@@ -359,11 +374,43 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 scores[:, np.newaxis]
             ], axis=1)
 
-            return keypoints_with_scores.astype(np.float32)
+            keypoints_with_scores = keypoints_with_scores.astype(np.float32)
+
+            # 可选关键点平滑
+            keypoints_with_scores = self._apply_keypoint_smoothing(keypoints_with_scores)
+
+            return keypoints_with_scores
 
         except Exception as e:
             print(f"[RTMPose] 姿态估计失败: {e}")
             return None
+
+    def _apply_keypoint_smoothing(self, keypoints: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        """
+        对关键点坐标进行EMA平滑（仅x/y，置信度按均值平滑），低于阈值的点不参与平滑。
+        """
+        if keypoints is None or self.keypoint_smooth_alpha <= 0:
+            self._last_keypoints = keypoints
+            return keypoints
+
+        alpha = self.keypoint_smooth_alpha
+        min_conf = self.keypoint_min_conf
+
+        if self._last_keypoints is None or self._last_keypoints.shape != keypoints.shape:
+            self._last_keypoints = keypoints
+            return keypoints
+
+        smoothed = keypoints.copy()
+        prev = self._last_keypoints
+
+        # 仅对高置信度点平滑
+        mask = (keypoints[:, 2] >= min_conf) & (prev[:, 2] >= min_conf)
+        if np.any(mask):
+            smoothed[mask, 0:2] = alpha * keypoints[mask, 0:2] + (1 - alpha) * prev[mask, 0:2]
+            smoothed[mask, 2] = alpha * keypoints[mask, 2] + (1 - alpha) * prev[mask, 2]
+
+        self._last_keypoints = smoothed
+        return smoothed
 
     def get_keypoint_names(self) -> List[str]:
         """获取关键点名称列表"""

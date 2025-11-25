@@ -14,6 +14,8 @@ models:
     device: cuda:0
     confidence: 0.5
     iou: 0.45
+    smooth_alpha: 0.0   # 0=off; >0 enables EMA smoothing of bbox (higher=more smooth)
+    expand_ratio: 1.0   # 1=no expansion
 
   # ========================================================================
   # Pose Estimation Model Configuration - Model Switching Location
@@ -37,14 +39,22 @@ models:
     backend: rtmpose
     model: rtmpose-s  # Options: rtmpose-tiny, rtmpose-s, rtmpose-m, rtmpose-l
     config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
-    # Stage 3: TensorRT engine (BGR fixed!)
-    # checkpoint: models/rtmpose/rtmpose-s.engine
-    # Stage 1: PyTorch FP32 (for comparison)
+
+    # ===== Model Checkpoint Options =====
+    # Pure FP32 TensorRT (trtexec from mmdeploy_work_v2/end2end.onnx)
+    # checkpoint: models/rtmpose/mmdeploy_output_fp32/end2end.engine
+    # Stage 1: PyTorch FP32 (推荐：稳定性优先，全场景可靠，需要激活mmdeploy_env环境)
     checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
-    # Stage 1: PyTorch FP32 (fallback)
-    # checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
+    # Stage 2: TensorRT engine (预处理bug - 需要MMDeploy正确导出)
+    # checkpoint: models/rtmpose/rtmpose-s.engine
+
+
+
+
     device: cuda:0    # RTMPose requires GPU
     confidence: 0.3
+    keypoint_min_conf: 0.3          # Lower threshold to avoid dropping points
+    keypoint_smooth_alpha: 0.0      # 0=off, disable keypoint smoothing
     # TensorRT configuration
     tensorrt:
       enabled: false  # Not used when loading .engine file directly
@@ -77,7 +87,7 @@ camera:
 
 inference:
   skip_frames: 0
-  detection_interval: 2  # GPU mode detects every frame (no skipping)
+  detection_interval: 3  # Detect every 3 frames (reduce YOLO load by 66%)
   max_buffer_size: 150
 
 roi:
@@ -250,7 +260,75 @@ tensorrt:
   workspace_size: 4096  # MB
 
 
+# == Performance Notes ==
+# Jetson Nano Performance (with RTMPose + LSTM Classifier + RL Decision):
 
 # yolo v8 (vidoeo) + rtmpose (dection) + lstm (classifier) + rl (decision) = 16 fps (empty) 10 fps (human in frame) on jetson nano
 # yolo v8 (tensor rt) + rtmpose (dection) + lstm (classifier) + rl (decision) = yolo v8 (pytorch 44ms -> tensort 24ms) 14 fps 
 # yolo v8 (tensor rt) + rtmpose (tensor rt) + lstm (classifier) + rl (decision) = yolo v8 (pytorch 44ms -> tensort 24ms) + rtmpose (dection 67ms -> tensor rt 30ms) 14 fps 
+
+# == RTMPose Model Options Explanation ==
+
+# - PyTorch FP32 (.pth, MMPose path): full PyTorch/MMPose runtime, accuracy is solid, but heavy dependencies and slower (~18ms pose per frame). Good as a
+#   baseline/fallback, not TensorRT.
+# - Legacy FP16 TensorRT (rtmpose-s.engine): pure TensorRT but exported directly FP16 from ONNX; SimCC/preprocess mismatch caused big keypoint drift and
+#   confidence collapse, with no real speed gain. Treat as unusable.
+# - Current mmdeploy FP32 TensorRT (mmdeploy_output_fp32/end2end.engine): pure TensorRT, accuracy matches FP32, and in practice faster than the bad FP16
+#   build (~11ms pose). This is the recommended engine now.
+
+
+# == RTMPose Model Process Details ==
+
+# - PyTorch FP32 (MMPose baseline):
+#     - Model file: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
+#     - Origin: official pretrained RTMPose-S checkpoint (no local training; download per INSTALL_RTMPOSE.md).
+
+# - Legacy FP16 TensorRT engine (problematic):
+#     - Model file: models/rtmpose/rtmpose-s.engine
+#     - Built via trtexec from the plain ONNX:
+#       trtexec --onnx=models/rtmpose/rtmpose-s.onnx \
+#               --saveEngine=models/rtmpose/rtmpose-s.engine \
+#               --fp16
+#     - ONNX source: models/rtmpose/rtmpose-s.onnx (exported earlier with export_rtmpose_to_onnx.py / similar).
+
+# - Current recommended FP32 TensorRT engine (mmdeploy export):
+#     - Model file: models/rtmpose/mmdeploy_output_fp32/end2end.engine
+#     - Steps:
+#         1. Export ONNX with mmdeploy pipeline (working dir models/rtmpose/mmdeploy_work_v2, produces end2end.onnx).
+#         2. Build FP32 engine with trtexec (no --fp16):
+#             trtexec --onnx=models/rtmpose/mmdeploy_work_v2/end2end.onnx \
+#                     --saveEngine=models/rtmpose/mmdeploy_output_fp32/end2end.engine
+#     - This is the engine currently wired in config/config_gpu.yaml.
+
+
+
+
+# fps Performance Summary on Jetson Nano:
+
+# 10-14-16
+# suddenly appear-human in frame-empty frame
+# detection interval 2
+
+# 7-14-16
+# suddenly appear-human in frame-empty frame
+# detection interval 3
+
+
+
+
+#
+# • 结论：精度问题确实来自 FP16。重新用纯 FP32 构建了 TensorRT 引擎（models/rtmpose/mmdeploy_output_fp32/end2end.engine，用 trtexec 从 models/rtmpose/mmdeploy_work_v2/end2end.onnx 直接生成），对比结果：
+
+#   - FP32 TRT logits vs PyTorch：x/y 平均差 ~0.0006，max <0.0045。
+#   - 使用 Torch 的 head.decode 解码后，关键点均值差 0.029px，最大 0.5px，几乎一致（argmax 日志的 25px 差异是因为诊断时 x/y 交换，已确认解码后的坐标对齐）。
+#   - 之前的 FP16 引擎解码均值差 ~38px，说明峰值翻转/漂移是 FP16 数值带来的。
+
+#   说明：预处理/导出 ONNX 没问题（ONNXRuntime 与 PyTorch 完全一致）。误差只在 TensorRT FP16 推理阶段出现。
+
+#   建议下一步：
+
+#   1. 若继续用 FP16：在构建时强制关键层/整体使用 FP32（例如 SimCC 的 MLP/最后几层），或使用 precisionConstraints=obey + layerPrecisions 针对 MLP/输出层指定 FP32；也可直接关闭 fp16_mode 重导出。
+#   2. 如果性能允许，可直接使用当前 FP32 引擎验证全流程精度；其推理延迟约 2.4ms@256x192（trtexec 实测），性能损失可接受的话是最稳的方案。
+#   3. 若需再尝试 FP16，可在比较脚本里对 TRT logits 先 softmax/温度缩放再取 argmax，判断是否还能稳定峰值；若仍漂移，就固定这些层为 FP32。
+
+
