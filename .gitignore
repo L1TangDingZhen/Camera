@@ -45,16 +45,24 @@ camera/
 .DS_Store
 
 # ===================================
-# Models (Large Files)
+# Models (Large Files - All Locations)
 # ===================================
-models/*.pt
+# YOLO models (anywhere)
+*.pt
+yolov8*.pt
+
+# Model files in models directory
 models/*.pth
 models/*.onnx
 models/*.engine
+models/*.pkl
+models/*.json
 models/**/*.pt
 models/**/*.pth
 models/**/*.onnx
 models/**/*.engine
+models/**/*.pkl
+models/**/*.json
 models/**/mmdeploy_output*/
 models/**/mmdeploy_work*/
 !models/.gitkeep
@@ -154,6 +162,12 @@ check_*.py
 analyze_*.py
 compare_*.py
 benchmark_*.py
+record_*.py
+validate_*.py
+
+# Experimental/unused wrappers
+*_wrapper_hybrid.py
+tensorrt_wrapper_hybrid.py
 
 # But keep important test files
 !test_quick.py
@@ -169,3 +183,21 @@ TENSORRT_JOURNEY.md
 TENSORRT_STATUS.md
 THREE_SOLUTIONS_COMPARISON.md
 CLAUDE.md
+PERFORMANCE_OPTIMIZATION.md
+FUTURE_ROADMAP.md
+TROUBLESHOOTING.md
+
+# ===================================
+# Model-specific files
+# ===================================
+*.pth
+*.onnx
+rtmpose-*.py
+
+# ===================================
+# Video/Image test files
+# ===================================
+test_video.mp4
+test_comparison.jpg
+comparison_*.jpg
+data/*.mp4
