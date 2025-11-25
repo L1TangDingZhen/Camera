@@ -84,6 +84,9 @@ class LifeTracker:
                 raise RuntimeError(f"无法找到任何可用摄像头 (已尝试 /dev/video0-9)")
 
         # 设置摄像头参数
+        # 强制使用MJPEG编码（避免YUYV带宽瓶颈，特别是FHD分辨率）
+        # MJPEG: ~50-200KB/帧 vs YUYV: ~4MB/帧 (FHD)
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
         self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])

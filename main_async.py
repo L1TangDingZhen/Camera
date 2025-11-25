@@ -99,6 +99,9 @@ class AsyncLifeTracker:
             raise RuntimeError(f"Cannot open camera: {camera_config['source']}")
 
         # Set camera parameters
+        # Force MJPEG encoding (avoid YUYV bandwidth bottleneck, especially for FHD)
+        # MJPEG: ~50-200KB/frame vs YUYV: ~4MB/frame (FHD)
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
         self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])

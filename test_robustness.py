@@ -44,6 +44,8 @@ class RobustnessTest:
         print("[初始化] 打开摄像头...")
         camera_config = self.config['camera']
         self.cap = cv2.VideoCapture(camera_config['source'])
+        # Force MJPEG encoding for better bandwidth efficiency
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
         self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])

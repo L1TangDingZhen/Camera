@@ -32,6 +32,8 @@ class ROICalibrator:
         if not self.cap.isOpened():
             raise RuntimeError(f"无法打开摄像头: {camera_config['source']}")
 
+        # Force MJPEG encoding for better bandwidth efficiency
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
 
