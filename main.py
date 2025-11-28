@@ -17,63 +17,63 @@ from src.storage import EventLogger
 
 
 class LifeTracker:
-    """Life Tracker主类"""
+    """Life Tracker main class"""
 
     def __init__(self, config_path: str):
         """
         Args:
-            config_path: 配置文件路径
+            config_path: Configuration file path
         """
-        # 加载配置
+        # Load configuration
         with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
         print(f"\n{'='*60}")
         print(f"  Life Tracker - {self.config['name']}")
-        print(f"  设备: {self.config['device']}")
+        print(f"  Device: {self.config['device']}")
         print(f"{'='*60}\n")
 
-        # 初始化组件
+        # Initialize components
         self._init_components()
 
     def _init_components(self):
-        """初始化所有组件"""
-        # 1. 创建检测器
-        print("[初始化] 加载人体检测器...")
+        """Initialize all components"""
+        # 1. Create detectors
+        print("[Init] Loading person detector...")
         self.person_detector = PersonDetector(self.config['models']['person'])
 
-        print("[初始化] 加载姿态估计器...")
+        print("[Init] Loading pose estimator...")
         self.pose_estimator = PoseEstimatorFactory.create(self.config['models']['pose'])
 
-        # 2. 创建ROI管理器
-        print("[初始化] 加载ROI管理器...")
+        # 2. Create ROI manager
+        print("[Init] Loading ROI manager...")
         self.roi_manager = ROIManager(self.config.get('roi', {}))
 
-        # 3. 创建事件记录器
-        print("[初始化] 创建事件记录器...")
+        # 3. Create event logger
+        print("[Init] Create event logger...")
         self.event_logger = EventLogger(self.config)
 
-        # 4. 创建状态机（传入database用于SessionTracker）
-        print("[初始化] 创建状态机...")
+        # 4. Create state machine（Pass database for SessionTracker）
+        print("[Init] Create state machine...")
         self.state_machine = BehaviorStateMachine(self.config, self.roi_manager, database=self.event_logger.db)
 
-        # 5. 初始化摄像头
-        print("[初始化] 打开摄像头...")
+        # 5. InitCamera
+        print("[Init] Opening camera...")
         camera_config = self.config['camera']
         camera_source = camera_config['source']
 
-        # 如果配置的摄像头打不开，自动搜索可用摄像头
+        # If configured camera cannot open, auto-search for available cameras
         self.cap = cv2.VideoCapture(camera_source)
 
         if not self.cap.isOpened():
-            print(f"[警告] 摄像头 {camera_source} 无法打开，自动搜索可用摄像头...")
+            print(f"[WARNING] Camera {camera_source} cannot open, searching for available cameras...")
             found = False
-            for i in range(10):  # 尝试搜索 /dev/video0 到 /dev/video9
+            for i in range(10):  # Try to search /dev/video0 to /dev/video9
                 test_cap = cv2.VideoCapture(i)
                 if test_cap.isOpened():
                     ret, frame = test_cap.read()
                     if ret and frame is not None:
-                        print(f"[成功] 找到可用摄像头: /dev/video{i} (分辨率: {frame.shape[1]}x{frame.shape[0]})")
+                        print(f"[SUCCESS] Found available camera: /dev/video{i} (Resolution: {frame.shape[1]}x{frame.shape[0]})")
                         self.cap = test_cap
                         camera_source = i
                         found = True
@@ -81,48 +81,48 @@ class LifeTracker:
                     test_cap.release()
 
             if not found:
-                raise RuntimeError(f"无法找到任何可用摄像头 (已尝试 /dev/video0-9)")
+                raise RuntimeError(f"Cannot find any available Camera (Tried /dev/video0-9)")
 
-        # 设置摄像头参数
-        # 强制使用MJPEG编码（避免YUYV带宽瓶颈，特别是FHD分辨率）
-        # MJPEG: ~50-200KB/帧 vs YUYV: ~4MB/帧 (FHD)
+        # Set camera parameters
+        # Force MJPEG encoding (avoid YUYV bandwidth bottleneck, especially for FHD resolution)
+        # MJPEG: ~50-200KB/frame vs YUYV: ~4MB/frame (FHD)
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config['resolution'][0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config['resolution'][1])
         self.cap.set(cv2.CAP_PROP_FPS, camera_config['fps'])
 
-        # 打印实际使用的摄像头参数
+        # Print actual camera parameters
         actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-        print(f"[摄像头] 设备: /dev/video{camera_source}")
-        print(f"[摄像头] 实际分辨率: {actual_width}x{actual_height} @ {actual_fps} FPS")
+        print(f"[Camera] Device: /dev/video{camera_source}")
+        print(f"[Camera] Actual resolution: {actual_width}x{actual_height} @ {actual_fps} FPS")
 
-        # 运行参数
+        # Runtime parameters
         self.show_visualization = True
         self.running = True
 
-        print("\n[初始化] 所有组件加载完成!\n")
+        print("\n[Init] All components loaded successfully!\n")
 
     def run(self):
-        """主循环"""
-        print("[运行] 开始监测...\n")
+        """Main loop"""
+        print("[Running] Start monitoring...\n")
 
         frame_count = 0
         fps_calc_time = time.time()
         fps = 0
 
-        # 性能分析
+        # Performance profiling
         enable_profiling = self.config.get('debug', {}).get('show_state_info', False)
         if enable_profiling:
-            print("🔍 性能分析模式已启用\n")
+            print("🔍 Performance profiling mode enabled\n")
 
-        # 检测频率控制
+        # Detection frequency control
         detection_interval = self.config.get('inference', {}).get('detection_interval', 1)
-        detection_counter = 0  # 检测帧计数器
-        cached_bbox = None  # 缓存的bbox
+        detection_counter = 0  # Detection frame counter
+        cached_bbox = None  # Cached bbox
         if detection_interval > 1:
-            print(f"⚡ 检测优化: 每{detection_interval}帧检测一次，中间帧复用结果\n")
+            print(f"⚡ Detection optimization: Every{detection_interval}frame detect once, reuse results for intermediate frames\n")
 
         profiling_data = {
             'read_frame': [],
@@ -134,10 +134,10 @@ class LifeTracker:
             'total_frame': []
         }
 
-        # 创建可调整大小的窗口
+        # Create resizable window
         if self.show_visualization:
             cv2.namedWindow('Life Tracker', cv2.WINDOW_NORMAL)
-            # 设置默认窗口大小为摄像头分辨率（Full HD）
+            # Set default window size to camera resolution（Full HD）
             cam_width = self.config['camera']['resolution'][0]
             cam_height = self.config['camera']['resolution'][1]
             cv2.resizeWindow('Life Tracker', cam_width, cam_height)
@@ -146,11 +146,11 @@ class LifeTracker:
             while self.running:
                 frame_start = time.time()
 
-                # 读取帧
+                # Read frame
                 t0 = time.time()
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("[错误] 无法读取摄像头画面")
+                    print("[ERROR] Cannot read camera frame")
                     break
                 t1 = time.time()
                 profiling_data['read_frame'].append((t1 - t0) * 1000)
@@ -158,54 +158,54 @@ class LifeTracker:
                 frame_count += 1
                 current_time = time.time()
 
-                # 1. 人体检测（每N帧检测一次，中间帧复用）
+                # 1. Person detection（Detect every N frames, reuse for intermediate frames）
                 detection_counter += 1
                 t0 = time.time()
 
                 if detection_counter % detection_interval == 0:
-                    # 执行实际检测
+                    # Execute actual detection
                     bbox = self.person_detector.detect(frame)
-                    cached_bbox = bbox  # 缓存结果
+                    cached_bbox = bbox  # Cache result
                     t1 = time.time()
                     profiling_data['detection'].append((t1 - t0) * 1000)
                 else:
-                    # 复用上一次的检测结果
+                    # Reuse previous detection result
                     bbox = cached_bbox
                     t1 = time.time()
-                    # 不记录时间，因为没有实际检测
+                    # Do not record time, no actual detection performed
 
-                # 2. 姿态估计
+                # 2. Pose estimation
                 t0 = time.time()
                 keypoints = None
                 world_landmarks = None
                 if bbox is not None:
                     keypoints = self.pose_estimator.estimate(frame, bbox)
-                    # 获取3D world landmarks（如果支持）
+                    # Get 3D world landmarks (if supported)
                     if hasattr(self.pose_estimator, 'get_world_landmarks'):
                         world_landmarks = self.pose_estimator.get_world_landmarks()
                 t1 = time.time()
                 profiling_data['pose'].append((t1 - t0) * 1000)
 
-                # 保存关键点用于调试显示
+                # Save keypoints for debug display
                 self._last_keypoints = keypoints
 
-                # 3. 更新状态机（使用3D坐标）
+                # 3. Update state machine（Use 3D coordinates）
                 t0 = time.time()
                 events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
                 t1 = time.time()
                 profiling_data['state_machine'].append((t1 - t0) * 1000)
 
-                # 4. 记录事件
+                # 4. Log events
                 if events:
                     self.event_logger.log_events(events)
 
-                # 5. 记录性能指标（每60秒）
+                # 5. Record performance metrics（Every 60 seconds）
                 if frame_count % (self.config['camera']['fps'] * 60) == 0:
                     detector_metrics = self.person_detector.get_performance_metrics()
                     pose_metrics = self.pose_estimator.get_performance_metrics()
                     self.event_logger.log_performance(detector_metrics, pose_metrics)
 
-                # 6. 可视化
+                # 6. Visualization
                 t0 = time.time()
                 if self.show_visualization:
                     vis_frame = self._visualize(frame, bbox, keypoints, fps)
@@ -213,38 +213,38 @@ class LifeTracker:
                 t1 = time.time()
                 profiling_data['visualization'].append((t1 - t0) * 1000)
 
-                # 7. 处理按键
+                # 7. Handle key
                 t0 = time.time()
                 if self.show_visualization:
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('q'):
-                        print("\n[退出] 用户按下'q'键")
+                        print("\n[Exit] User pressed'q'key")
                         break
                     elif key == ord('r'):
-                        # 切换ROI显示
+                        # Toggle ROI display
                         self.show_roi = not getattr(self, 'show_roi', True)
                 t1 = time.time()
                 profiling_data['waitkey'].append((t1 - t0) * 1000)
 
-                # 记录总帧时间
+                # Record total frame time
                 frame_end = time.time()
                 profiling_data['total_frame'].append((frame_end - frame_start) * 1000)
 
-                # 8. 计算FPS
+                # 8. Calculate FPS
                 if current_time - fps_calc_time >= 1.0:
                     fps = frame_count / (current_time - fps_calc_time)
                     frame_count = 0
                     fps_calc_time = current_time
 
-                # 9. 每30帧输出性能分析（约3秒一次）
+                # 9. Every30frameOutput performance profiling（approx3once per second）
                 if enable_profiling and len(profiling_data['total_frame']) >= 30:
                     self._print_profiling(profiling_data)
-                    # 清空数据
+                    # Clear data
                     for key in profiling_data:
                         profiling_data[key] = []
 
         except KeyboardInterrupt:
-            print("\n[退出] 用户中断 (Ctrl+C)")
+            print("\n[Exit] User interrupted (Ctrl+C)")
 
         finally:
             self.cleanup()
@@ -252,49 +252,49 @@ class LifeTracker:
     def _visualize(self, frame: np.ndarray, bbox: np.ndarray,
                    keypoints: np.ndarray, fps: float) -> np.ndarray:
         """
-        可视化
+        Visualization
 
         Args:
-            frame: 原始帧
-            bbox: 边界框
-            keypoints: 关键点
-            fps: 帧率
+            frame: Original frame
+            bbox: Bounding box
+            keypoints: Keypoints
+            fps: Frame rate
 
         Returns:
-            可视化后的帧
+            Visualized frame
         """
         vis_frame = frame.copy()
 
-        # 绘制ROI区域
+        # Draw ROI zones
         if getattr(self, 'show_roi', True):
             vis_frame = self.roi_manager.draw_zones(vis_frame)
 
-        # 绘制bbox
+        # Draw bbox
         if bbox is not None:
             x1, y1, x2, y2, conf = bbox.astype(int)
             cv2.rectangle(vis_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(vis_frame, f"Person: {conf:.2f}", (x1, y1 - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # 绘制关键点
+        # Draw keypoints
         if keypoints is not None:
             self._draw_keypoints(vis_frame, keypoints)
 
-        # 绘制状态信息
+        # Draw state info
         self._draw_status(vis_frame, fps)
 
         return vis_frame
 
     def _draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray):
-        """绘制关键点和骨架"""
+        """Draw keypointsand skeleton"""
         from src.detectors.base import Keypoint
 
-        # 绘制关键点
+        # Draw keypoints
         for i, (x, y, conf) in enumerate(keypoints):
             if conf > 0.3:
                 cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
 
-        # 绘制骨架
+        # Draw skeleton
         connections = Keypoint.get_connections()
         for idx1, idx2 in connections:
             if keypoints[idx1, 2] > 0.3 and keypoints[idx2, 2] > 0.3:
@@ -303,73 +303,73 @@ class LifeTracker:
                 cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
     def _draw_status(self, frame: np.ndarray, fps: float):
-        """绘制状态信息"""
+        """Draw state info"""
         h, w = frame.shape[:2]
 
-        # 调试模式：显示更详细的信息
+        # Debug mode: show more detailed information
         debug_mode = self.config.get('debug', {}).get('show_state_info', False)
         info_height = 150 if not debug_mode else 250
 
-        # 背景
+        # Background
         overlay = frame.copy()
         cv2.rectangle(overlay, (10, 10), (350, info_height), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
-        # 文本信息（针对Full HD分辨率优化）
+        # Text information（Optimized for Full HD resolution）
         y_offset = 40
         line_height = 35
-        font_scale = 1.0  # 增大字体（原0.6）
-        font_thickness = 3  # 增加粗细（原2）
+        font_scale = 1.0  # Increase font size（original0.6）
+        font_thickness = 3  # Increase thickness（original2）
 
         # FPS
         cv2.putText(frame, f"FPS: {fps:.1f}", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), font_thickness)
         y_offset += line_height
 
-        # 当前状态
+        # Current state
         state = self.state_machine.get_current_state()
         state_color = {
-            'sitting': (0, 255, 255),  # 黄色
-            'lying': (255, 0, 255),    # 紫色
-            'standing': (0, 255, 0),   # 绿色
-            'sleeping': (255, 0, 0),   # 蓝色
-            'absent': (128, 128, 128), # 灰色
+            'sitting': (0, 255, 255),  # Yellow
+            'lying': (255, 0, 255),    # Purple
+            'standing': (0, 255, 0),   # Green
+            'sleeping': (255, 0, 0),   # Blue
+            'absent': (128, 128, 128), # Gray
         }.get(state.value, (255, 255, 255))
 
         cv2.putText(frame, f"State: {state.value}", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, state_color, font_thickness)
         y_offset += line_height
 
-        # 当前区域
+        # Current zone
         zone = self.state_machine.current_zone or "None"
         cv2.putText(frame, f"Zone: {zone}", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
         y_offset += line_height
 
-        # 状态持续时间
+        # State duration
         duration = self.state_machine.get_state_duration(time.time())
         cv2.putText(frame, f"Duration: {duration:.1f}s", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
         y_offset += line_height
 
-        # 调试信息（针对Full HD优化）
-        debug_font_scale = 0.7  # 增大调试文字（原0.4-0.5）
-        debug_thickness = 2     # 增加粗细（原1）
-        debug_line_height = 30  # 增大行距（原18-20）
+        # Debug info（Optimized for Full HD）
+        debug_font_scale = 0.7  # Increase debug text size（original0.4-0.5）
+        debug_thickness = 2     # Increase thickness（original1）
+        debug_line_height = 30  # Increase line spacing（original18-20）
 
         if debug_mode and hasattr(self, '_last_keypoints') and self._last_keypoints is not None:
             from src.detectors.base import Keypoint, PoseUtils
             kp = self._last_keypoints
 
-            # 计算关键指标
+            # Calculate key metrics
             try:
-                # 身体角度
+                # Body angle
                 body_angle = PoseUtils.get_body_orientation(kp)
                 cv2.putText(frame, f"Body Angle: {body_angle:.1f}deg", (20, y_offset),
                            cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
                 y_offset += debug_line_height
 
-                # 膝盖角度
+                # Knee angle
                 if kp[Keypoint.LEFT_HIP, 2] > 0.3 and kp[Keypoint.LEFT_KNEE, 2] > 0.3 and kp[Keypoint.LEFT_ANKLE, 2] > 0.3:
                     knee_angle = PoseUtils.calculate_angle(
                         kp[Keypoint.LEFT_HIP, :2],
@@ -380,16 +380,16 @@ class LifeTracker:
                                cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
                     y_offset += debug_line_height
 
-                # 身体高度
+                # Body height
                 body_height = PoseUtils.get_body_height(kp)
                 cv2.putText(frame, f"Height: {body_height:.0f}px", (20, y_offset),
                            cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (0, 255, 255), debug_thickness)
                 y_offset += debug_line_height
 
-                # 诊断信息（显示判断依据）
+                # Diagnostic info（Show decision basis）
                 diagnosis = self.state_machine.get_diagnosis()
                 if diagnosis:
-                    y_offset += 15  # 空一行
+                    y_offset += 15  # Empty line
                     cv2.putText(frame, "=== Diagnosis ===", (20, y_offset),
                                cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (255, 200, 0), debug_thickness)
                     y_offset += debug_line_height
@@ -399,12 +399,12 @@ class LifeTracker:
                                cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, (255, 255, 255), debug_thickness)
                     y_offset += debug_line_height
 
-                    # 根据模式显示不同的诊断信息
+                    # Show different diagnostic info based on mode
                     if mode == '3d':
-                        # 3D模式：显示真实3D特征
+                        # 3D mode: show real 3D features
                         if 'torso_angle' in diagnosis:
                             torso_angle = diagnosis['torso_angle']
-                            color = (0, 255, 255)  # 黄色
+                            color = (0, 255, 255)  # Yellow
                             cv2.putText(frame, f"TorsoAngle: {torso_angle:.1f}deg (0=upright, 90=horizontal)",
                                        (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, debug_font_scale, color, debug_thickness)
                             y_offset += debug_line_height
@@ -423,7 +423,7 @@ class LifeTracker:
                                        (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
                             y_offset += 18
 
-                        # 显示判断结果
+                        # Show judgment result
                         if 'lying_check' in diagnosis:
                             lying = diagnosis['lying_check']
                             color = (0, 255, 0) if lying else (128, 128, 128)
@@ -438,39 +438,39 @@ class LifeTracker:
                                        (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
                             y_offset += 18
 
-                        # 显示SVM概率分布（如果可用）
+                        # Show SVM probability distribution (if available)
                         if hasattr(self.state_machine, 'last_probabilities') and self.state_machine.last_probabilities:
-                            y_offset += 10  # 增加间距
+                            y_offset += 10  # Increase spacing
                             cv2.putText(frame, "SVM Probabilities:",
                                        (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                             y_offset += 20
 
                             probs = self.state_machine.last_probabilities
-                            # 按概率降序排列
+                            # Sort by probability descending
                             sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
 
                             for label, prob in sorted_probs:
-                                # 颜色：概率高用绿色，低用灰色
+                                # Color: high probability use Green, low use Gray
                                 if prob > 0.5:
-                                    color = (0, 255, 0)  # 绿色
+                                    color = (0, 255, 0)  # Green
                                 elif prob > 0.3:
-                                    color = (0, 255, 255)  # 黄色
+                                    color = (0, 255, 255)  # Yellow
                                 else:
-                                    color = (128, 128, 128)  # 灰色
+                                    color = (128, 128, 128)  # Gray
 
-                                # 绘制概率条
-                                bar_width = int(prob * 150)  # 最大150像素
+                                # Draw probability bar
+                                bar_width = int(prob * 150)  # max150pixels
                                 cv2.rectangle(frame, (120, y_offset - 10), (120 + bar_width, y_offset + 5),
                                             color, -1)
 
-                                # 显示文本
+                                # Show text
                                 text = f"{label.capitalize()}: {prob:.2f}"
                                 cv2.putText(frame, text, (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX,
                                           0.4, color, 1)
                                 y_offset += 18
 
                     elif mode == 'upper_body':
-                        # 上半身模式：显示 body_angle 和 shoulder_hip_ratio
+                        # Upper body mode: show body_angle and shoulder_hip_ratio
                         if 'body_angle' in diagnosis:
                             angle = diagnosis['body_angle']
                             angle_range = diagnosis.get('body_angle_range', (0, 0))
@@ -492,7 +492,7 @@ class LifeTracker:
                             y_offset += 18
 
                     elif mode == 'full_body':
-                        # 全身模式：显示 knee_angle 和 hip_height_ratio
+                        # Full body mode: show knee_angle and hip_height_ratio
                         if 'knee_angle' in diagnosis:
                             knee_angle = diagnosis['knee_angle']
                             knee_threshold = diagnosis.get('knee_angle_threshold', 120)
@@ -516,7 +516,7 @@ class LifeTracker:
             except:
                 pass
 
-        # 提示信息
+        # Hint info
         tips = "Press: 'q'=quit"
         if debug_mode:
             tips += " | Debug ON"
@@ -524,24 +524,24 @@ class LifeTracker:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
     def _print_profiling(self, profiling_data):
-        """打印性能分析报告"""
+        """Print performance profiling report"""
         print("\n" + "="*70)
-        print("  性能分析报告 (30帧平均)")
+        print("  Performance profiling report (30frame average)")
         print("="*70)
 
-        # 计算每个阶段的平均值
+        # Calculate average value for each stage
         total_avg = np.mean(profiling_data['total_frame'])
 
         stages = [
-            ('读取帧', 'read_frame'),
-            ('人体检测', 'detection'),
-            ('姿态估计', 'pose'),
-            ('状态机更新', 'state_machine'),
-            ('可视化绘制', 'visualization'),
+            ('Read frame', 'read_frame'),
+            ('Person detection', 'detection'),
+            ('Pose estimation', 'pose'),
+            ('State machine update', 'state_machine'),
+            ('Visualization rendering', 'visualization'),
             ('waitKey', 'waitkey'),
         ]
 
-        print(f"{'阶段':<12} {'平均耗时':>10} {'占比':>8} {'最小值':>10} {'最大值':>10}")
+        print(f"{'Stage':<12} {'Avg Time':>10} {'Ratio':>8} {'Min':>10} {'Max':>10}")
         print("-"*70)
 
         detection_count = len(profiling_data['detection'])
@@ -554,26 +554,26 @@ class LifeTracker:
                 max_val = np.max(profiling_data[key])
                 percentage = (avg / total_avg * 100) if total_avg > 0 else 0
 
-                # 对检测阶段显示实际检测次数
+                # Show actual detection times for detection stage
                 if key == 'detection' and detection_count < total_frames:
-                    print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms (仅{detection_count}次)")
+                    print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms (only{detection_count}times)")
                 else:
                     print(f"{name:<12} {avg:>8.2f}ms {percentage:>6.1f}% {min_val:>8.2f}ms {max_val:>8.2f}ms")
 
         print("-"*70)
-        print(f"{'总耗时':<12} {total_avg:>8.2f}ms {'100.0%':>7}")
-        print(f"{'理论FPS':<12} {1000/total_avg:>8.1f}")
+        print(f"{'Total':<12} {total_avg:>8.2f}ms {'100.0%':>7}")
+        print(f"{'Theoretical FPS':<12} {1000/total_avg:>8.1f}")
 
-        # 显示检测优化信息
+        # Show detection optimization info
         detection_interval = self.config.get('inference', {}).get('detection_interval', 1)
         if detection_interval > 1:
-            print(f"{'检测间隔':<12} 每{detection_interval}帧检测1次 (降低{(1-1/detection_interval)*100:.0f}%检测负载)")
+            print(f"{'Detection interval':<12} Every{detection_interval}frameDetection1times (reduce{(1-1/detection_interval)*100:.0f}%detection load)")
 
         print("="*70 + "\n")
 
     def cleanup(self):
-        """清理资源"""
-        print("\n[清理] 释放资源...")
+        """Cleanup resources"""
+        print("\n[Cleanup] Release resources...")
 
         if hasattr(self, 'cap'):
             self.cap.release()
@@ -583,57 +583,57 @@ class LifeTracker:
         if hasattr(self, 'event_logger'):
             self.event_logger.close()
 
-        print("[清理] 完成!")
+        print("[Cleanup] Completed!")
 
 
 def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description='Life Tracker - 行为监测系统')
+    """Main function"""
+    parser = argparse.ArgumentParser(description='Life Tracker - Behavior monitoring system')
 
     parser.add_argument('--config', type=str,
-                       help='配置文件路径（直接指定）')
+                       help='Configuration file path (specify directly)')
     parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'], default='gpu',
-                       help='运行模式: cpu（笔记本/X390）或 gpu（PC/Jetson），默认gpu，便于直接 `python main.py --mode gpu`')
+                       help='Running mode: cpu（Laptop/X390）or gpu（PC/Jetson），default gpu, convenient for direct `python main.py --mode gpu`')
     parser.add_argument('--no-vis', action='store_true',
-                       help='不显示可视化窗口')
+                       help='Do not show visualization window')
     parser.add_argument('--debug', action='store_true',
-                       help='调试模式：显示关键点、骨架和判断信息')
+                       help='Debug mode: show keypoints, skeleton and decision info')
 
     args = parser.parse_args()
 
-    # 选择配置文件
+    # Select configuration file
     if args.config:
-        # 直接指定配置文件
+        # Directly specify config file
         config_path = args.config
     elif args.mode:
-        # 使用 --mode 参数
+        # Use --mode parameter
         config_path = f'config/config_{args.mode}.yaml'
     else:
-        # 默认使用CPU模式
+        # Default use CPU mode
         config_path = 'config/config_cpu.yaml'
 
-    # 检查配置文件
+    # Check configuration file
     if not Path(config_path).exists():
-        print(f"错误: 配置文件不存在: {config_path}")
-        print(f"\n可用的配置文件：")
-        print(f"  config/config_cpu.yaml  - CPU模式（笔记本/X390）")
-        print(f"  config/config_gpu.yaml  - GPU模式（PC/Jetson）")
+        print(f"ERROR: Configuration file does not exist: {config_path}")
+        print(f"\nAvailable configuration files:")
+        print(f"  config/config_cpu.yaml  - CPU mode（Laptop/X390）")
+        print(f"  config/config_gpu.yaml  - GPU mode（PC/Jetson）")
         return
 
-    # 创建tracker
+    # Create tracker
     tracker = LifeTracker(config_path)
 
-    # 启用调试模式
+    # Enable debug mode
     if args.debug:
         tracker.config['debug']['show_keypoints'] = True
         tracker.config['debug']['show_skeleton'] = True
         tracker.config['debug']['show_angles'] = True
-        print("\n🔍 调试模式已启用")
+        print("\n🔍 Debug mode enabled")
 
     if args.no_vis:
         tracker.show_visualization = False
 
-    # 运行
+    # Running
     tracker.run()
 
 

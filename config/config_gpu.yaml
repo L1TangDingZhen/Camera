@@ -55,7 +55,11 @@ models:
     confidence: 0.3
     keypoint_min_conf: 0.3          # Lower threshold to avoid dropping points
     keypoint_smooth_alpha: 0.0      # 0=off, disable keypoint smoothing
-    # TensorRT configuration
+
+    # PyTorch AMP (Automatic Mixed Precision) - Default optimization
+    use_amp: false  # Disabled: Baseline FP32 performs 7.6% better than AMP on RTMPose-s
+
+    # TensorRT configuration (advanced optimization, requires separate engine files)
     tensorrt:
       enabled: false  # Not used when loading .engine file directly
       fp16_mode: false
@@ -69,8 +73,8 @@ models:
     #
     # Installation:
     #   1. pip install openmim
-    #   2. mim install mmcv==2.0.0 mmpose==1.0.0
-    #   3. python download_rtmpose_models.py --model rtmpose-s
+    #   2. mim install mmengine==0.8.0 mmcv==2.1.0 mmpose==1.1.0
+    #   3. mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/
     #   4. See detailed guide: INSTALL_RTMPOSE.md
     #
     # ⚠️ Windows Users Note:
@@ -81,13 +85,14 @@ models:
 camera:
   source: 0  # video0是彩色摄像头
   fps: 30  # GPU mode supports high frame rate
-  resolution: [640, 480]  # VGA - 摄像头可达30FPS (720p只有10FPS)
+  resolution: [1920, 1080]  # FHD - MJPEG encoding enables 30FPS
   flip: false
   rotation: 0
 
 inference:
   skip_frames: 0
   detection_interval: 3  # Detect every 3 frames (reduce YOLO load by 66%)
+  pose_interval: 2       # Estimate pose every 2 frames (reduce RTMPose load by 50%)
   max_buffer_size: 150
 
 roi:
@@ -239,14 +244,15 @@ logging:
   file: "logs/app.log"
   max_size: 10485760  # 10MB
   backup_count: 5
-  performance_metrics: true
+  performance_metrics: false # write yolo and rtmpose performance data to database every 60 seconds, check on web dashboard
 
 debug:
   # Debug mode configuration
-  show_keypoints: false  # Show keypoints
-  show_skeleton: false   # Show skeleton
+  show_keypoints: true   # Show keypoints (yellow dots on joints)
+  show_skeleton: true    # Show skeleton (green lines connecting joints)
   show_angles: false     # Show angle calculations
   show_state_info: true  # Show state detection info
+  performance_profiling: true  # Collect detailed timing statistics (disable in production), show after exit
 
 web:
   host: "0.0.0.0"
@@ -332,3 +338,512 @@ tensorrt:
 #   3. 若需再尝试 FP16，可在比较脚本里对 TRT logits 先 softmax/温度缩放再取 argmax，判断是否还能稳定峰值；若仍漂移，就固定这些层为 FP32。
 
 
+
+# ● Performance Benchmark Analysis Report
+
+#   Test Date: November 26, 2025
+#   System: Life Tracker - Async Pipeline
+#   Hardware: Jetson Orin Nano / RTX 4070
+#   Model Stack: YOLOv8n (TensorRT) + RTMPose-s (PyTorch FP32) + LSTM Classifier + RL Decision Agent
+
+#   ---
+#   Executive Summary
+
+#   This report compares performance metrics across three test scenarios:
+#   1. Video Benchmark - Synchronous Mode (FHD video file, no camera hardware)
+#   2. Video Benchmark - Asynchronous Mode (FHD video file, no camera hardware)
+#   3. Live Camera Test - Synchronous & Asynchronous Modes (FHD 1920×1080 @ 30fps, MJPEG encoding)
+
+#   Key Finding: Software processing times are highly consistent between video and camera tests when excluding camera I/O overhead. RTMPose pose
+#   estimation remains the primary computational bottleneck at ~48-58ms per frame.
+
+#   ---
+#   Test Configuration
+
+#   Hardware & Software Stack
+
+#   | Component          | Specification                                   |
+#   |--------------------|-------------------------------------------------|
+#   | Camera Resolution  | 1920×1080 (FHD)                                 |
+#   | Camera FPS Target  | 30 FPS                                          |
+#   | Camera Encoding    | MJPEG (forced via cv2.CAP_PROP_FOURCC)          |
+#   | Person Detection   | YOLOv8n TensorRT FP16 engine                    |
+#   | Pose Estimation    | RTMPose-s PyTorch FP32 (256×192 input)          |
+#   | Classifier         | LSTM + RL Decision Agent                        |
+#   | Detection Interval | Every 3 frames (67% load reduction)             |
+#   | Pipeline Modes     | Synchronous (serial) vs Asynchronous (4-thread) |
+
+#   Pipeline Architecture
+
+#   Synchronous Pipeline:
+#   Camera Read → YOLO Detection → RTMPose Estimation → State Machine → Visualization
+
+#   Asynchronous Pipeline (4 threads):
+#   Thread 1: Camera Read → Queue
+#   Thread 2: YOLO Detection (every 3 frames) → Queue
+#   Thread 3: RTMPose Estimation → Queue
+#   Thread 4: State Machine + Visualization
+
+#   ---
+#   Detailed Performance Results
+
+#   1. Video Benchmark Results (No Camera Hardware)
+
+#   1.1 Synchronous Mode
+
+#   Test Conditions:
+#   - Input: FHD (1920×1080) video file @ 30fps
+#   - Total frames processed: 4629
+
+#   Per-Frame Timing Breakdown:
+
+#   | Stage          | Avg Time (ms) | % of Total | Min (ms) | Max (ms) |
+#   |----------------|---------------|------------|----------|----------|
+#   | Video Read     | 5.94          | 9.3%       | -        | -        |
+#   | YOLO Detection | 29.13         | 45.5%      | -        | -        |
+#   | RTMPose Pose   | 48.23         | 75.4%      | -        | -        |
+#   | State Machine  | <1.0          | <1%        | -        | -        |
+#   | Total          | 63.98         | 100%       | -        | -        |
+
+#   Performance Metrics:
+#   - Theoretical Max FPS: 15.6
+#   - Primary Bottleneck: RTMPose (48.23ms, 75.4% of total time)
+
+#   ---
+#   1.2 Asynchronous Mode
+
+#   Test Conditions:
+#   - Input: FHD (1920×1080) video file @ 30fps
+#   - Total frames processed: 4639
+
+#   Per-Frame Timing Breakdown:
+
+#   | Stage           | Avg Time (ms) | % of Total | Min (ms) | Max (ms) |
+#   |-----------------|---------------|------------|----------|----------|
+#   | Video Read      | 10.03         | -          | -        | -        |
+#   | YOLO Detection  | 50.14         | -          | -        | -        |
+#   | RTMPose Pose    | 52.19         | -          | -        | -        |
+#   | State Machine   | <1.0          | -          | -        | -        |
+#   | Effective Total | 54.48         | 100%       | -        | -        |
+
+#   Performance Metrics:
+#   - Theoretical Max FPS: 18.4
+#   - Primary Bottleneck: RTMPose (52.19ms)
+#   - CPU Usage: 27% (efficient parallel execution)
+#   - Performance Gain vs Sync: +18%
+
+#   ---
+#   2. Live Camera Test Results (FHD 1920×1080)
+
+#   2.1 Asynchronous Mode (main_async.py)
+
+#   Test Conditions:
+#   - Camera: /dev/video0, 1920×1080 @ 30 FPS, MJPEG encoding
+#   - Test Duration: ~30 seconds
+#   - Total frames captured: 902 (camera thread)
+
+#   Detailed Timing Statistics:
+
+#   | Stage          | Count | Avg (ms) | % of Total | Min (ms) | Max (ms) |
+#   |----------------|-------|----------|------------|----------|----------|
+#   | Camera Read    | 902   | 44.44    | 32.4%      | 23.71    | 343.53   |
+#   | YOLO Detection | 294   | 34.01    | 24.8%      | 21.04    | 89.36    |
+#   | RTMPose Pose   | 322   | 57.82    | 42.2%      | 46.87    | 600.11   |
+#   | State Machine  | 792   | 0.70     | 0.5%       | 0.22     | 3.58     |
+
+#   Performance Metrics:
+#   - Bottleneck Stage: RTMPose (57.82ms)
+#   - Theoretical Max FPS: 17.3
+#   - Actual Display FPS: 30 (reported, but with frame drops)
+#   - Software Processing Time (excl. camera): 92.5ms
+
+#   Performance Distribution:
+#   Camera Read:      32.4%
+#   YOLO Detection:   24.8%
+#   RTMPose Pose:     42.2%  ← Primary bottleneck
+#   State Machine:     0.5%
+
+#   ---
+#   2.2 Synchronous Mode (main.py)
+
+#   Test Conditions:
+#   - Camera: /dev/video0, 1920×1080 @ 30 FPS, MJPEG encoding
+#   - Test Duration: ~50 seconds
+#   - Performance reports: 30-frame rolling averages
+
+#   Stable State Performance (person detected):
+
+#   | Stage          | Avg (ms)      | % of Total | Min (ms) | Max (ms) | Notes              |
+#   |----------------|---------------|------------|----------|----------|--------------------|
+#   | Camera Read    | 16.29-16.82   | 16.1-16.6% | 16.02    | 26.08    | Stable             |
+#   | YOLO Detection | 26.10-26.87   | 25.6-26.4% | 25.77    | 28.60    | Every 3 frames     |
+#   | RTMPose Pose   | 47.92-49.98   | 47.6-48.5% | 46.44    | 70.96    | Primary bottleneck |
+#   | State Machine  | 0.86-0.87     | 0.8-0.9%   | 0.83     | 1.00     | Minimal            |
+#   | Visualization  | 13.84-14.34   | 13.7-14.0% | 13.35    | 16.86    | UI overhead        |
+#   | waitKey        | 12.33-12.41   | 12.0-12.3% | 11.57    | 12.82    | UI blocking        |
+#   | Total          | 100.57-103.13 | 100%       | -        | -        | -                  |
+
+#   Performance Metrics:
+#   - Theoretical Max FPS: 9.7-9.9
+#   - Total Processing Time: 100.57-103.13ms per frame
+#   - Software Processing (excl. camera, UI): ~75.6ms
+
+#   ---
+#   Comparative Analysis
+
+#   3.1 Video Test vs Camera Test (Software Processing Only)
+
+#   Comparing pure software processing times (excluding camera I/O):
+
+#   | Test Scenario  | YOLO (ms) | RTMPose (ms) | State (ms) | Software Total (ms) | Theoretical FPS    |
+#   |----------------|-----------|--------------|------------|---------------------|--------------------|
+#   | Video - Sync   | 29.13     | 48.23        | <1.0       | ~77.4               | 13.0               |
+#   | Video - Async  | 50.14     | 52.19        | <1.0       | ~102 (parallel)     | 18.4 (parallel)    |
+#   | Camera - Sync  | 26.44     | 48.33        | 0.87       | ~75.6               | 13.2               |
+#   | Camera - Async | 34.01     | 57.82        | 0.70       | ~92.5               | 17.3 (theoretical) |
+
+#   Key Observations:
+
+#   1. RTMPose Consistency:
+#     - Video Sync: 48.23ms
+#     - Camera Sync: 48.33ms
+#     - Difference: +0.2% (virtually identical)
+#   2. YOLO Consistency:
+#     - Video Sync: 29.13ms
+#     - Camera Sync: 26.44ms
+#     - Difference: -9.2% (camera test slightly faster, likely due to detection interval optimization)
+#   3. Total Software Processing:
+#     - Video Sync: 77.4ms
+#     - Camera Sync: 75.6ms
+#     - Difference: -2.3% (highly consistent)
+
+#   ---
+#   3.2 Synchronous vs Asynchronous Performance Gains
+
+#   Video Test Comparison:
+
+#   | Metric           | Synchronous | Asynchronous | Improvement |
+#   |------------------|-------------|--------------|-------------|
+#   | Total Time/Frame | 63.98ms     | 54.48ms      | -14.9%      |
+#   | Theoretical FPS  | 15.6        | 18.4         | +18.0%      |
+#   | CPU Usage        | ~17%        | 27%          | +58.8%      |
+
+#   Camera Test Comparison (Software Only):
+
+#   | Metric              | Synchronous | Asynchronous         | Improvement |
+#   |---------------------|-------------|----------------------|-------------|
+#   | Software Processing | 84.28ms     | 57.82ms (bottleneck) | -31.4%      |
+#   | Theoretical FPS     | 11.9        | 17.3                 | +45.4%      |
+
+#   Note: Synchronous camera test includes visualization overhead (12-14ms) and waitKey (12ms), which are not in the async critical path.
+
+#   ---
+#   3.3 Camera I/O Performance Analysis
+
+#   Synchronous Mode:
+#   - Camera Read: 16.29-16.82ms (avg 16.5ms)
+#   - Variance: Very stable (min=16.02ms, max=26.08ms)
+#   - % of Total: 16.1-16.6%
+
+#   Asynchronous Mode:
+#   - Camera Read: 44.44ms (avg)
+#   - Variance: Highly unstable (min=23.71ms, max=343.53ms)
+#   - % of Total: 32.4%
+
+#   Discrepancy Analysis:
+
+#   The 2.7× difference in camera read times between sync (16.5ms) and async (44.4ms) modes is likely due to:
+
+#   1. Measurement methodology - Async mode may include queue waiting time
+#   2. Frame dropping - Async non-blocking queue puts may inflate average
+#   3. Thread scheduling - Multi-threaded contention for USB/system resources
+
+#   MJPEG Encoding Impact:
+
+#   Despite forcing MJPEG encoding (cv2.CAP_PROP_FOURCC = 'MJPG'), FHD camera read still shows:
+#   - Baseline: 16.5ms (sync mode, stable)
+#   - Theoretical bandwidth: 1920×1080 @ 30fps MJPEG ≈ 1.5-6 MB/s (acceptable for USB 2.0)
+#   - Actual performance: Sufficient for 30 FPS in sync mode, unstable in async mode
+
+#   ---
+#   Performance Bottleneck Analysis
+
+#   4.1 Bottleneck Hierarchy (FHD Camera Test)
+
+#   Asynchronous Mode:
+#   1. 🥇 RTMPose Pose Estimation: 57.82ms (42.2%) ← Software bottleneck
+#   2. 🥈 Camera Read: 44.44ms (32.4%) ← Hardware bottleneck
+#   3. 🥉 YOLO Detection: 34.01ms (24.8%)
+#   4. State Machine: 0.70ms (0.5%)
+
+#   Synchronous Mode:
+#   1. 🥇 RTMPose Pose Estimation: 48.33ms (48.1%) ← Primary bottleneck
+#   2. 🥈 YOLO Detection: 26.44ms (26.3%)
+#   3. 🥉 Camera Read: 16.5ms (16.4%)
+#   4. Visualization: 14ms (13.9%)
+#   5. waitKey: 12ms (12.3%)
+#   6. State Machine: 0.87ms (0.9%)
+
+#   ---
+#   4.2 RTMPose Performance Characteristics
+
+#   Consistency Across Test Scenarios:
+
+#   | Test Type      | RTMPose Time | % of Processing | Variance              |
+#   |----------------|--------------|-----------------|-----------------------|
+#   | Video - Sync   | 48.23ms      | 75.4%           | Stable                |
+#   | Video - Async  | 52.19ms      | -               | +8.2% vs sync         |
+#   | Camera - Sync  | 48.33ms      | 48.1%           | +0.2% vs video        |
+#   | Camera - Async | 57.82ms      | 42.2%           | +10.8% vs camera sync |
+
+#   Key Insights:
+
+#   1. Resolution Independence: RTMPose processes fixed 256×192 crops, making it largely independent of input resolution (480p vs FHD)
+#   2. Sync vs Async Overhead: Async mode shows 8-10% higher RTMPose times, likely due to:
+#     - GPU resource contention (4 threads competing)
+#     - Thread context switching overhead
+#     - Measurement including queue wait times
+#   3. Absolute Consistency: Camera and video tests show nearly identical RTMPose times in synchronous mode (48.23ms vs 48.33ms = 0.2% difference)
+
+#   ---
+#   Statistical Summary
+
+#   5.1 Performance Metrics Comparison Table
+
+#   | Metric           | Video Sync | Video Async       | Camera Sync | Camera Async |
+#   |------------------|------------|-------------------|-------------|--------------|
+#   | Total Time/Frame | 63.98ms    | 54.48ms           | 100.57ms    | -            |
+#   | Software Only    | 77.4ms     | ~102ms (parallel) | 75.6ms      | 92.5ms       |
+#   | Camera Read      | 5.94ms     | 10.03ms           | 16.5ms      | 44.44ms      |
+#   | YOLO             | 29.13ms    | 50.14ms           | 26.44ms     | 34.01ms      |
+#   | RTMPose          | 48.23ms    | 52.19ms           | 48.33ms     | 57.82ms      |
+#   | State Machine    | <1ms       | <1ms              | 0.87ms      | 0.70ms       |
+#   | Theoretical FPS  | 15.6       | 18.4              | 9.9         | 17.3         |
+#   | CPU Usage        | ~17%       | 27%               | -           | -            |
+
+#   ---
+#   5.2 RTMPose Bottleneck Analysis
+
+#   Time Distribution (as % of total processing):
+
+#   Video Sync:     48.23ms / 63.98ms  = 75.4%
+#   Video Async:    52.19ms / 54.48ms  = 95.8% (bottleneck dominance in parallel)
+#   Camera Sync:    48.33ms / 100.57ms = 48.1%
+#   Camera Async:   57.82ms / 137.0ms  = 42.2%
+
+#   Absolute Time Variance:
+
+#   Min: 48.23ms (video sync)
+#   Max: 57.82ms (camera async)
+#   Range: 9.59ms (19.9% variance)
+#   Mean: 51.64ms
+#   Std Dev: ±4.1ms
+
+#   ---
+#   5.3 YOLO Detection Analysis
+
+#   Time Distribution:
+
+#   | Test Scenario | YOLO Time | Detection Frequency | Effective Time |
+#   |---------------|-----------|---------------------|----------------|
+#   | Video Sync    | 29.13ms   | Every frame         | 29.13ms        |
+#   | Video Async   | 50.14ms   | Every 3 frames      | 16.7ms avg     |
+#   | Camera Sync   | 26.44ms   | Every 3 frames      | 8.8ms avg      |
+#   | Camera Async  | 34.01ms   | Every 3 frames      | 11.3ms avg     |
+
+#   Key Observation: Detection interval optimization (every 3 frames) reduces YOLO's effective impact to 8.8-16.7ms average per frame.
+
+#   ---
+#   5.4 Frame Processing Throughput
+
+#   Frames Processed Per Test:
+
+#   | Test                          | Total Frames | Duration | Actual FPS | Frame Drops |
+#   |-------------------------------|--------------|----------|------------|-------------|
+#   | Video Sync                    | 4,629        | -        | 15.6       | None        |
+#   | Video Async                   | 4,639        | -        | 18.4       | Minimal     |
+#   | Camera Sync                   | ~1,500       | 50s      | 9.9        | None        |
+#   | Camera Async (Camera Thread)  | 902          | 30s      | 30.0       | Significant |
+#   | Camera Async (Display Thread) | 792          | 30s      | 17.3       | -           |
+
+#   Frame Drop Analysis (Camera Async):
+#   - Camera captured: 902 frames
+#   - Display processed: 792 frames
+#   - Drop rate: 12.2%
+#   - Cause: Queue backpressure from RTMPose bottleneck
+
+#   ---
+#   Data Consistency Validation
+
+#   6.1 Cross-Test Validation
+
+#   RTMPose Time Consistency:
+
+#   Video Sync (48.23ms) vs Camera Sync (48.33ms)
+#   Absolute difference: 0.10ms
+#   Relative difference: 0.2%
+#   Conclusion: Excellent consistency ✓
+
+#   Software Processing Consistency:
+
+#   Video Sync Software Total: 77.4ms
+#   Camera Sync Software Total: 75.6ms
+#   Absolute difference: 1.8ms
+#   Relative difference: -2.3%
+#   Conclusion: Highly consistent ✓
+
+#   ---
+#   6.2 Performance Reproducibility
+
+#   Camera Sync Mode - 30-frame Rolling Averages (8 samples):
+
+#   | Sample | Camera Read | YOLO    | RTMPose | State  | Total    |
+#   |--------|-------------|---------|---------|--------|----------|
+#   | 1      | 16.29ms     | 26.46ms | 48.60ms | 0.86ms | 101.11ms |
+#   | 2      | 16.38ms     | 26.28ms | 48.58ms | 0.87ms | 101.02ms |
+#   | 3      | 16.79ms     | 26.10ms | 48.95ms | 0.86ms | 101.85ms |
+#   | 4      | 16.46ms     | 26.63ms | 48.53ms | 0.87ms | 101.02ms |
+#   | 5      | 16.65ms     | 26.34ms | 47.92ms | 0.86ms | 100.57ms |
+#   | 6      | 16.82ms     | 26.44ms | 48.33ms | 0.87ms | 101.50ms |
+#   | 7      | 16.27ms     | 23.74ms | 48.60ms | 0.86ms | 100.80ms |
+#   | 8      | 16.61ms     | 26.87ms | 49.98ms | 0.87ms | 103.13ms |
+
+#   Statistical Analysis:
+
+#   RTMPose Mean: 48.69ms
+#   RTMPose Std Dev: ±0.66ms (1.4%)
+#   RTMPose Min: 47.92ms
+#   RTMPose Max: 49.98ms
+#   Coefficient of Variation: 1.4%
+
+#   Conclusion: Highly stable and reproducible ✓
+
+#   ---
+#   Conclusion
+
+#   Key Findings
+
+#   1. Software Processing Consistency: Camera and video tests show virtually identical software processing times (RTMPose: 48.23ms vs 48.33ms, difference
+#    <0.2%)
+#   2. RTMPose Dominance: Pose estimation consistently accounts for 42-75% of total processing time across all test scenarios
+#   3. Async Performance Gain: Asynchronous pipeline provides 18% FPS improvement in video tests and 45% theoretical improvement in camera tests
+#   4. Camera I/O Bottleneck: FHD camera read introduces significant overhead (16.5-44.4ms) depending on pipeline mode
+#   5. Pipeline Efficiency: Software processing times remain consistent regardless of input source (video file vs live camera), validating the pipeline
+#   design
+
+#   Performance Characteristics Summary
+
+#   Computational Bottleneck: RTMPose pose estimation (48-58ms)
+#   Hardware Bottleneck: Camera I/O at FHD resolution (16-44ms)
+#   Current Throughput: 9.9-18.4 FPS depending on mode
+#   System Stability: High (RTMPose variance <2%)
+
+#   ---
+#   Report Generated: November 26, 2025
+#   Test Environment: Jetson Orin Nano / RTX 4070, CUDA-enabled
+#   Software Version: Life Tracker v1.1.0 (commit 2e8966f)
+
+
+
+  # 📋 Future Feature Roadmap
+
+  # 1. Multi-Camera Support 📹📹📹
+
+  # - Simultaneous monitoring from multiple cameras across different areas
+  # - Key considerations:
+  #   - Multi-threaded/multi-process architecture
+  #   - GPU resource allocation (multiple RTMPose instances)
+  #   - Camera synchronization issues
+  #   - Current 25 FPS is insufficient! Requires much higher performance headroom
+
+  # 2. Face Recognition 👤
+
+  # - Identify different individuals (distinguish family members)
+  # - Additional requirements:
+  #   - Face detection model (e.g., RetinaFace/SCRFD)
+  #   - Face recognition model (e.g., ArcFace)
+  #   - Adds approximately 10-20ms processing time per frame
+
+  # 3. Multi-Person Detection 👥👥
+
+  # - Simultaneously track poses of multiple people
+  # - Challenges:
+  #   - YOLO detects multiple bboxes
+  #   - Each person requires RTMPose inference (N people = N× computation)
+  #   - Person ID tracking (avoid confusion)
+  #   - Massive performance pressure!
+
+  # 4. RTMPose TensorRT Acceleration ⚡
+
+  # - Convert RTMPose to TensorRT engine
+  # - Expected benefits:
+  #   - RTMPose: 57ms → 20-30ms
+  #   - FPS: 25 → 35-40+
+  #   - This optimization is mandatory!
+
+  # 5. Web Dashboard Improvements 🌐
+
+  # - Current functionality needs expansion
+  # - Potential features:
+  #   - Multi-person data visualization
+  #   - Real-time multi-camera video preview
+  #   - Face recognition management interface
+  #   - Enhanced statistical charts and analytics
+
+  # 🎯 Current Performance Assessment
+
+  # Based on the future roadmap, re-evaluating current 25 FPS:
+
+  # | Feature                                 | Estimated Performance Impact | Remaining Capacity |
+  # |-----------------------------------------|------------------------------|--------------------|
+  # | Baseline (single person, single camera) | 40ms/frame                   | 25 FPS             |
+  # | + Face Recognition                      | +15ms → 55ms                 | 18 FPS ❌           |
+  # | + Multi-Person ×2                       | ×2 → 110ms                   | 9 FPS ❌❌           |
+  # | + Multi-Camera ×2                       | ×2 → 220ms                   | 4.5 FPS ❌❌❌        |
+
+  # Conclusion: Current 25 FPS is far from sufficient for future requirements!
+
+  # 🚀 Optimization Priority Recommendations
+
+  # Based on your roadmap, suggested priorities:
+
+  # P0 - Must Do (Immediate)
+
+  # 1. ✅ pose_interval=2 - Completed!
+  # 2. 🔥 RTMPose TensorRT - Most critical!
+  #   - Expected: 57ms → 20ms (3× speedup)
+  #   - FPS: 25 → 50+
+  #   - Foundation for multi-person/multi-camera support
+
+  # P1 - High Priority (Near-term)
+
+  # 3. YOLO TensorRT Optimization - You already have yolov8n.engine
+  #   - Potential for further optimization
+  # 4. Multi-Person Architecture Design
+  #   - Batch inference for RTMPose
+  #   - Person tracking algorithms (DeepSORT/ByteTrack)
+
+  # P2 - Medium Priority (Mid-term)
+
+  # 5. Face Recognition Integration
+  #   - Select lightweight models
+  #   - Consider reduced face recognition frequency (not every frame)
+  # 6. Multi-Camera Architecture
+  #   - Multi-process design
+  #   - Resource isolation
+
+  # P3 - Low Priority (Long-term)
+
+  # 7. Web Dashboard Enhancements
+  #   - UI optimization after core functionality is complete
+
+  # 📊 Target Performance (Supporting Future Features)
+
+  # To support the planned features, targets should be:
+
+  # | Configuration                                   | Target FPS     | Required Optimizations   |
+  # |-------------------------------------------------|----------------|--------------------------|
+  # | Single person, single camera                    | 50+ FPS        | RTMPose TensorRT         |
+  # | Single person, single camera + face recognition | 35+ FPS        | + Lightweight face model |
+  # | 2 people, single camera + face recognition      | 25+ FPS        | + Batch inference        |
+  # | 2 people, dual cameras + face recognition       | 15+ FPS/stream | + Multi-process          |

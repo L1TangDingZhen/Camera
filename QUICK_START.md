@@ -1,4 +1,87 @@
-# Prolonged Sitting Reminder System - Quick Start Guide
+# Life Tracker - Quick Start Guide
+
+> Get started in 30 seconds - Choose your platform and run!
+
+---
+
+## 🚀 Choose Your Platform
+
+### PC - CPU Version (No GPU Required)
+```bash
+# One-line start with Docker (recommended)
+docker-compose --profile cpu up
+
+# Or manual run
+python main.py --config config/config_cpu.yaml
+```
+**Performance**: 8-12 FPS | **Inference**: YOLOv8 + MediaPipe (CPU)
+**Use case**: Development, testing, no GPU available
+**Details**: See [README.md - PC CPU Mode](README.md#pc-installation-cpu-mode)
+
+---
+
+### PC - GPU Version (NVIDIA GPU)
+```bash
+# One-line start with Docker (recommended)
+docker-compose --profile gpu up
+
+# Or manual run
+python main.py --config config/config_gpu.yaml
+```
+**Performance**: 25-30 FPS | **Inference**: YOLOv8 + RTMPose (GPU accelerated)
+**Use case**: Production deployment, high performance requirements
+**Details**: See [README.md - PC GPU Mode](README.md#pc-installation-gpu-mode)
+
+---
+
+### Jetson Orin Nano (Edge Device)
+```bash
+# Step 1: Install PyTorch prerequisite
+pip install torch==2.8.0 torchvision==0.23.0 \
+  --index-url=https://pypi.jetson-ai-lab.io/jp6/cu126
+
+# Step 2: Automated setup (interactive, asks about RTMPose)
+./scripts/jetson_setup.sh
+
+# Step 3: Run balanced mode (recommended, 720p @ 20-25 FPS)
+source Camera/bin/activate
+./scripts/jetson_run.sh balanced
+```
+**Performance**: 20-25 FPS @ 720p | **Power**: ~15W | **Inference**: YOLOv8 + RTMPose
+**Use case**: 24/7 monitoring, edge deployment, low power
+**Details**: See [DEPLOY_JETSON.md](DEPLOY_JETSON.md)
+
+---
+
+## 📊 Platform Comparison
+
+| Platform | FPS | Power | Latency | GPU Required | Inference Method | Best For |
+|----------|-----|-------|---------|--------------|------------------|----------|
+| **PC CPU** | 8-12 | ~50W | ~100ms | No | YOLO + MediaPipe (CPU) | Development, testing |
+| **PC GPU** | 25-30 | ~180W | ~35ms | Yes (NVIDIA) | YOLO + RTMPose (GPU) | Production, high performance |
+| **Jetson Balanced** | 20-25 | ~15W | ~45ms | Yes (integrated) | YOLO + RTMPose (GPU) | 24/7 monitoring, edge |
+| **Jetson Lite** | 25-30 | ~10W | ~35ms | Yes (integrated) | YOLO + RTMPose (GPU) | Power saving, battery |
+| **Jetson Performance** | 15-20 | ~25W | ~60ms | Yes (integrated) | YOLO + RTMPose (GPU) | Maximum quality, 1080p |
+
+**Recommendation**:
+- 🧪 **Just testing?** → PC CPU (easiest, no GPU needed)
+- 🚀 **Production on PC?** → PC GPU (fastest, best accuracy)
+- 🏠 **24/7 home monitoring?** → Jetson Balanced (low power, always-on)
+
+---
+
+## 📖 Complete Documentation
+
+- **PC Installation Guide**: [README.md](README.md)
+- **Jetson Deployment Guide**: [DEPLOY_JETSON.md](DEPLOY_JETSON.md)
+- **Docker Deployment Guide**: [DOCKER.md](DOCKER.md)
+- **RTMPose Installation**: [INSTALL_RTMPOSE.md](INSTALL_RTMPOSE.md)
+- **User Guide**: [USER_GUIDE.md](USER_GUIDE.md)
+- **Technical Guide**: [DL_RL_TECHNICAL_GUIDE.md](DL_RL_TECHNICAL_GUIDE.md)
+
+---
+
+# Feature Overview & Usage Guide
 
 ## ✅ Completed Features
 

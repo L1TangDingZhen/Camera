@@ -77,14 +77,14 @@ OpenMIM is OpenMMLab's package management tool that automatically handles versio
 ### Step 2: Install MMPose Dependencies
 
 ```bash
-# Install mmcv (automatically selects version compatible with PyTorch)
-mim install mmcv==2.0.0
-
-# Install mmengine
+# Install mmengine (core dependency)
 mim install mmengine==0.8.0
 
+# Install mmcv (automatically selects version compatible with PyTorch)
+mim install mmcv==2.1.0
+
 # Install mmpose
-mim install mmpose==1.0.0
+mim install mmpose==1.1.0
 ```
 
 **Note**: These commands will automatically download pre-compiled wheel packages, avoiding C++/CUDA code compilation.
@@ -92,11 +92,14 @@ mim install mmpose==1.0.0
 ### Step 3: Download RTMPose Models
 
 ```bash
-# Download recommended model (rtmpose-s)
-python download_rtmpose_models.py --model rtmpose-s
+# Download RTMPose-s model (recommended)
+mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/
 
-# Or download all models
-python download_rtmpose_models.py --all
+# Or download RTMPose-m model (higher accuracy)
+mim download mmpose --config rtmpose-m_8xb256-420e_coco-256x192 --dest models/rtmpose/
+
+# Or download RTMPose-l model (best accuracy)
+mim download mmpose --config rtmpose-l_8xb256-420e_coco-256x192 --dest models/rtmpose/
 ```
 
 ### Step 4: Verify Installation
@@ -163,7 +166,7 @@ sudo apt install python3-pip
 
 # Then follow Linux installation steps
 pip install openmim
-mim install mmcv==2.0.0 mmpose==1.0.0
+mim install mmcv==2.1.0 mmpose==1.1.0
 ```
 
 **Advantages**:
@@ -190,13 +193,13 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 # 3. Try installing mmcv (may fail)
 pip install openmim
-mim install mmcv==2.0.0  # May require 30+ minutes compilation
+mim install mmcv==2.1.0  # May require 30+ minutes compilation
 
 # 4. If compilation fails, try pre-compiled version
 pip install mmcv -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html
 
 # 5. Install mmpose
-mim install mmpose==1.0.0
+mim install mmpose==1.1.0
 ```
 
 **Common Errors**:
@@ -263,7 +266,7 @@ python main.py --config config/config_gpu.yaml
 
 ```bash
 pip install openmim
-mim install mmcv==2.0.0  # mim automatically downloads pre-compiled packages
+mim install mmcv==2.1.0  # mim automatically downloads pre-compiled packages
 ```
 
 If still failing (Windows), recommend using WSL2 or MediaPipe.
@@ -281,7 +284,7 @@ Reinstall matching versions:
 ```bash
 # Example: PyTorch 2.0 + CUDA 11.8
 pip install torch==2.0.0+cu118 --index-url https://download.pytorch.org/whl/cu118
-mim install mmcv==2.0.0
+mim install mmcv==2.1.0
 ```
 
 ### Q3: Model file download fails
@@ -289,8 +292,8 @@ mim install mmcv==2.0.0
 **A**: Try the following methods:
 
 ```bash
-# Method 1: Use download script
-python download_rtmpose_models.py --model rtmpose-s
+# Method 1: Use mim download (recommended)
+mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/
 
 # Method 2: Manual download
 # 1. Visit https://github.com/open-mmlab/mmpose/tree/main/projects/rtmpose

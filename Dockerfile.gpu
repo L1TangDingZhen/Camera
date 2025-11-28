@@ -1,0 +1,102 @@
+# ============================================================
+# Life Tracker - GPU Version Dockerfile
+# ============================================================
+# Platform: PC (x86_64/amd64) with NVIDIA GPU
+# Python: 3.10
+# CUDA: 12.2
+# Inference Method: YOLOv8 + RTMPose (GPU accelerated)
+# GPU Required: Yes (NVIDIA with CUDA support)
+#
+# Prerequisites:
+#   - NVIDIA GPU with CUDA support
+#   - NVIDIA Docker runtime installed (nvidia-docker2)
+#
+# Build: docker build -f Dockerfile.gpu -t life-tracker:gpu .
+# Run:   docker run --rm -it --gpus all --device /dev/video0 -p 5000:5000 life-tracker:gpu
+# ============================================================
+
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+LABEL maintainer="Life Tracker Team"
+LABEL version="2.0.0-gpu"
+LABEL description="Life Tracker GPU version - YOLO + RTMPose"
+LABEL inference.method="YOLOv8 + RTMPose"
+LABEL gpu.required="true"
+LABEL cuda.version="12.2"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
+# Install Python 3.10 and system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3.10-dev \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    ffmpeg \
+    git \
+    wget \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symbolic links for python
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/python3.10 /usr/bin/python3
+
+WORKDIR /app
+
+# Upgrade pip and install build tools
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy and install base Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install RTMPose dependencies (mmcv, mmpose)
+# This uses OpenMMLab's mim tool for correct versioning
+# Current tested versions (2025-11-28): mmcv 2.1.0, mmengine 0.8.0, mmpose 1.1.0
+RUN pip install --no-cache-dir openmim && \
+    mim install mmengine==0.8.0 && \
+    mim install mmcv==2.1.0 && \
+    mim install mmpose==1.1.0
+
+# Verify RTMPose installation
+RUN python -c "import mmcv; print(f'mmcv: {mmcv.__version__}')" && \
+    python -c "import mmengine; print(f'mmengine: {mmengine.__version__}')" && \
+    python -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p data logs models config
+
+# Download YOLO models
+RUN cd models && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt
+
+# Download RTMPose models
+# Note: If this fails during build, models will be auto-downloaded at runtime
+RUN mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/ || \
+    echo "Warning: RTMPose model download failed during build, will retry at runtime"
+
+# Expose web dashboard port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5000/api/health', timeout=5)" || exit 1
+
+# Default command: run with GPU config in headless mode
+CMD ["python", "main.py", "--config", "config/config_gpu.yaml", "--no-vis"]

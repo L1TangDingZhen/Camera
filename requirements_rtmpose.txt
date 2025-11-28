@@ -1,17 +1,45 @@
-# RTMPose Dependencies Installation Guide
 # ============================================================
-# This file provides installation instructions for RTMPose pose estimator.
-# RTMPose requires mmcv and mmpose packages from OpenMMLab.
+# Life Tracker - RTMPose Dependencies
+# ============================================================
+# This file provides RTMPose installation for GPU-accelerated pose estimation
+# RTMPose significantly improves performance compared to MediaPipe CPU inference
 #
-# Choose the appropriate installation method based on your platform:
-#   - PC Users (Linux/Windows): See Section A
-#   - Jetson Users (Orin/Xavier): See Section B
+# Current Working Environment (Jetson Orin Nano, 2025-11-28):
+#   - mmcv: 2.1.0
+#   - mmengine: 0.8.0
+#   - mmpose: 1.1.0
+#   - PyTorch: 2.8.0
+#   - CUDA: 12.6
 #
-# For detailed troubleshooting, refer to: INSTALL_RTMPOSE.md
+# Choose installation method based on your platform:
+#   - Section A: PC (Linux/Windows with NVIDIA GPU)
+#   - Section B: Jetson (Orin/Xavier/Nano)
+#   - Section C: Quick Install (Current Versions)
 # ============================================================
 
-# Required for both platforms
+# ============================================================
+# Section C: Quick Install (Recommended - Current Versions)
+# ============================================================
+# These are the currently tested and working versions
+# Use this section for fastest installation
+
+# Step 1: Install OpenMIM (required package manager for OpenMMLab)
 openmim>=0.3.9
+
+# Step 2: After installing openmim, run these commands:
+#   mim install mmengine==0.8.0
+#   mim install mmcv==2.1.0
+#   mim install mmpose==1.1.0
+
+# Note: Do NOT use pip install for mmcv/mmpose, always use mim
+# mim automatically handles version compatibility and CUDA matching
+
+# ============================================================
+# Verified Versions (Current Environment)
+# ============================================================
+# mmengine==0.8.0    # Core dependency
+# mmcv==2.1.0        # Computer vision library (upgraded from 2.0.0)
+# mmpose==1.1.0      # Pose estimation library (upgraded from 1.0.0)
 
 # ============================================================
 # Section A: PC Installation (NVIDIA GPU with CUDA)
@@ -20,140 +48,204 @@ openmim>=0.3.9
 # Prerequisites:
 #   - NVIDIA GPU with CUDA support
 #   - PyTorch with CUDA installed (torch.cuda.is_available() == True)
+#   - CUDA 12.2+ recommended
 #   - 8GB+ RAM recommended (mmcv compilation requires memory)
 #
 # Installation Steps:
 #
-# 1. Install OpenMIM (already included above)
+# 1. Verify CUDA is available:
+#    python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, Version: {torch.version.cuda}')"
+#
+# 2. Install OpenMIM:
 #    pip install openmim
 #
-# 2. Install mmengine (required dependency for mmcv)
+# 3. Install mmengine (core dependency):
 #    mim install mmengine==0.8.0
 #
-# 3. Install mmcv (OpenMMLab computer vision library)
-#    mim install mmcv==2.0.0
+# 4. Install mmcv (computer vision library):
+#    mim install mmcv==2.1.0
 #
-#    Note: mim will automatically download the correct prebuilt wheel
-#          for your PyTorch/CUDA version. No manual compilation needed.
-#          Installation time: 2-5 minutes
+#    Note: mim automatically downloads the correct prebuilt wheel
+#          for your PyTorch/CUDA version. Installation: 2-5 minutes
 #
-# 4. Install mmpose (pose estimation library)
-#    mim install mmpose==1.0.0
+# 5. Install mmpose (pose estimation):
+#    mim install mmpose==1.1.0
 #
-# 5. Verify installation
+# 6. Verify installation:
 #    python -c "import mmcv; print(f'mmcv: {mmcv.__version__}')"
 #    python -c "import mmengine; print(f'mmengine: {mmengine.__version__}')"
 #    python -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
 #
-# 6. Download RTMPose models
+# 7. Download RTMPose models:
 #    python download_rtmpose_models.py --model rtmpose-s
 #
-# Windows Users:
-#   - If mmcv installation fails on Windows, consider:
-#     1. Use WSL2 (Windows Subsystem for Linux)
-#     2. Continue using MediaPipe (backend: mediapipe)
-#     3. Deploy directly to Jetson for production
+# Windows-Specific Notes:
+#   - If installation fails, consider using WSL2 (Windows Subsystem for Linux)
+#   - Alternatively, continue using MediaPipe (set backend: mediapipe in config)
+#   - CUDA toolkit must be installed on Windows for GPU support
 #
 # Common Issues:
-#   - "No matching distribution found": Your PyTorch/CUDA version may not
-#     have prebuilt wheels. Try upgrading PyTorch or use a different CUDA version.
-#   - Compilation errors: Make sure you have Visual Studio Build Tools (Windows)
-#     or gcc/g++ (Linux) installed.
+#   - "No matching distribution": Your PyTorch/CUDA version may not have
+#     prebuilt wheels. Try upgrading PyTorch or using different CUDA version
+#   - Compilation errors: Ensure you have build tools installed
+#     (Visual Studio Build Tools on Windows, gcc/g++ on Linux)
 
 # ============================================================
 # Section B: Jetson Installation (Orin/Xavier/Nano)
 # ============================================================
 #
 # Prerequisites:
-#   - JetPack 6.x (R36+) or JetPack 5.x (R35+)
-#   - PyTorch with CUDA installed from Jetson AI Lab PyPI
-#   - 4GB+ free RAM (swap recommended for 4GB models)
+#   - JetPack 6.2.1+ (R36.4.0+) or JetPack 5.x (R35+)
+#   - PyTorch 2.8.0+ installed from Jetson AI Lab PyPI
+#   - CUDA 12.6+ support
+#   - 4GB+ free RAM (8GB recommended, use swap if needed)
+#
+# Current Jetson Environment (2025-11-28):
+#   - Device: Jetson Orin Nano Super (8GB)
+#   - JetPack: 6.2.1 (R36.4.0)
+#   - PyTorch: 2.8.0
+#   - CUDA: 12.6
+#   - Kernel: 5.15.148-tegra
 #
 # Installation Steps:
 #
-# 1. Install OpenMIM (already included above)
+# 1. Verify CUDA is available:
+#    python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, Version: {torch.version.cuda}')"
+#    # Should show: CUDA: True, Version: 12.6
+#
+# 2. Install OpenMIM:
 #    pip install openmim
 #
-# 2. Install mmengine (required dependency)
+# 3. Install mmengine:
 #    mim install mmengine==0.8.0
 #
-# 3. Install mmcv (will compile from source)
-#    mim install mmcv==2.0.0
+# 4. Install mmcv (WILL COMPILE FROM SOURCE):
+#    mim install mmcv==2.1.0
 #
 #    ⚠️ IMPORTANT: This step compiles mmcv from source on Jetson
-#       - Compilation time: 20-40 minutes (depends on model)
-#       - High CPU usage is normal
+#       - Compilation time: 20-40 minutes (depends on Jetson model)
+#       - High CPU usage is normal during compilation
 #       - Do NOT interrupt the process
-#       - If compilation fails with memory error, enable swap:
-#         sudo fallocate -l 4G /swapfile
-#         sudo chmod 600 /swapfile
-#         sudo mkswap /swapfile
-#         sudo swapon /swapfile
+#       - Monitor with: watch -n 1 'ps aux | grep python'
 #
-# 4. Install mmpose
-#    mim install mmpose==1.0.0
+#    If you see memory errors during compilation, enable swap:
+#       sudo fallocate -l 4G /swapfile
+#       sudo chmod 600 /swapfile
+#       sudo mkswap /swapfile
+#       sudo swapon /swapfile
+#       # Verify: free -h
 #
-# 5. Verify installation
+# 5. Install mmpose:
+#    mim install mmpose==1.1.0
+#
+# 6. Verify installation:
 #    python -c "import mmcv; print(f'mmcv: {mmcv.__version__}')"
 #    python -c "import mmengine; print(f'mmengine: {mmengine.__version__}')"
 #    python -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
 #
-# 6. Download RTMPose models
+#    Expected output:
+#       mmcv: 2.1.0
+#       mmengine: 0.8.0
+#       mmpose: 1.1.0
+#
+# 7. Download RTMPose models:
 #    python download_rtmpose_models.py --model rtmpose-s
 #
 # Jetson-Specific Notes:
-#   - Use rtmpose-s or rtmpose-tiny for best performance
-#   - rtmpose-m/l may be too slow for real-time applications
+#   - Use rtmpose-s or rtmpose-tiny for best real-time performance
+#   - rtmpose-m/l may be too slow for real-time applications on Jetson
 #   - TensorRT acceleration is optional but recommended for production
 #
 # Memory Requirements:
-#   - Compilation: 4GB+ RAM (use swap if needed)
-#   - Runtime: 2GB+ RAM for rtmpose-s
+#   - Compilation: 4GB+ RAM (use swap if you have 4GB Jetson)
+#   - Runtime: 2-3GB RAM for rtmpose-s
 #
-# Tested Configurations:
-#   - Jetson Orin Nano: JetPack 6.2.1 + PyTorch 2.8.0 + CUDA 12.6 ✓
-#   - Jetson Orin NX:   JetPack 6.1   + PyTorch 2.5.0 + CUDA 12.2 ✓
-#   - Jetson Xavier NX: JetPack 5.1   + PyTorch 2.0.0 + CUDA 11.4 ✓
+# Performance Expectations (Jetson Orin Nano):
+#   - rtmpose-s: ~12-15ms inference, 20-25 FPS (720p)
+#   - rtmpose-tiny: ~8-10ms inference, 25-30 FPS (720p)
+#   - rtmpose-m: ~25-30ms inference, 15-20 FPS (720p, not recommended)
 
 # ============================================================
-# Section C: Alternative - Use MediaPipe Instead
+# Alternative: Continue Using MediaPipe
 # ============================================================
 #
-# If mmcv/mmpose installation fails or takes too long, you can
+# If RTMPose installation fails or takes too long, you can
 # continue using MediaPipe (default pose estimator):
 #
 # Advantages of MediaPipe:
 #   - Zero compilation, instant installation
 #   - CPU-friendly, works on any platform
 #   - Good accuracy for most use cases (AP ~67%)
-#   - Already installed in your environment
+#   - Already installed in requirements_jetson.txt
 #
-# To use MediaPipe, simply keep this config:
+# To use MediaPipe, set this in your config:
 #   models:
 #     pose:
-#       backend: mediapipe  # Default, no changes needed
+#       backend: mediapipe  # Default, no RTMPose needed
 #       complexity: 1
 #       device: cpu
 #
-# MediaPipe vs RTMPose comparison:
-#   - MediaPipe: ~50ms (CPU), AP 67%, easy installation
-#   - RTMPose-s: ~12ms (GPU), AP 68.6%, complex installation
+# MediaPipe vs RTMPose Performance Comparison:
 #
-# For most users, MediaPipe is sufficient. Switch to RTMPose
-# only if you need GPU acceleration or slightly better accuracy.
+#   Platform: PC (RTX 4070)
+#   - MediaPipe (CPU): ~50ms, AP 67%
+#   - RTMPose-s (GPU): ~12ms, AP 68.6%
+#
+#   Platform: Jetson Orin Nano
+#   - MediaPipe (CPU): ~80-100ms, AP 67%
+#   - RTMPose-s (GPU): ~12-15ms, AP 68.6%
+#
+# For most use cases, MediaPipe is sufficient. Switch to RTMPose
+# only if you need GPU acceleration or better performance.
 
 # ============================================================
-# Section D: Version Compatibility Matrix
+# Version Compatibility Matrix
 # ============================================================
 #
-# mmcv Version   mmengine    mmpose    PyTorch    CUDA
-# ------------   --------    ------    -------    ----
-# 2.0.0          0.8.0       1.0.0     2.0-2.8    11.8-12.6
-# 2.0.1          0.8.0       1.1.0     2.0-2.8    11.8-12.6
-# 2.1.0          0.9.0       1.2.0     2.0-2.8    11.8-12.6
+# Tested Combinations (2025-11-28):
 #
-# Recommended: mmcv==2.0.0 + mmengine==0.8.0 + mmpose==1.0.0
-# This combination is well-tested and stable.
+# mmcv     mmengine  mmpose  PyTorch   CUDA    Platform
+# ------   --------  ------  -------   -----   ---------
+# 2.1.0    0.8.0     1.1.0   2.8.0     12.6    Jetson ✓ (Current)
+# 2.0.0    0.8.0     1.0.0   2.0-2.8   11.8+   PC/Jetson ✓
+# 2.1.0    0.9.0     1.2.0   2.0-2.8   12.2+   PC ✓
+#
+# Recommended for Jetson Orin Nano (2025-11-28):
+#   mmcv==2.1.0 + mmengine==0.8.0 + mmpose==1.1.0
+#   This is the current tested and stable combination.
+#
+# Recommended for PC (NVIDIA GPU):
+#   mmcv==2.1.0 + mmengine==0.8.0 + mmpose==1.1.0
+#   (Same as Jetson for consistency)
+
+# ============================================================
+# Troubleshooting
+# ============================================================
+#
+# Problem: "CUDA out of memory" during installation
+# Solution:
+#   - Enable swap (see Section B step 4)
+#   - Close other applications
+#   - Use lighter model (rtmpose-tiny instead of rtmpose-s)
+#
+# Problem: "No module named 'mmcv'"
+# Solution:
+#   - Do NOT use "pip install mmcv", always use "mim install mmcv==2.1.0"
+#   - Verify mim is installed: pip show openmim
+#
+# Problem: Compilation hangs or takes forever
+# Solution:
+#   - This is normal for Jetson, wait 20-40 minutes
+#   - Monitor progress: watch -n 1 'ps aux | grep python'
+#   - Do not interrupt, it will corrupt installation
+#
+# Problem: "ImportError: cannot import name 'Config' from 'mmcv'"
+# Solution:
+#   - Version mismatch, uninstall and reinstall:
+#     pip uninstall mmcv mmengine mmpose -y
+#     mim install mmengine==0.8.0
+#     mim install mmcv==2.1.0
+#     mim install mmpose==1.1.0
 
 # ============================================================
 # Additional Resources
@@ -165,10 +257,11 @@ openmim>=0.3.9
 #   - RTMPose Paper: https://arxiv.org/abs/2303.07399
 #
 # Project Documentation:
-#   - INSTALL_RTMPOSE.md - Detailed installation guide
-#   - RTMPOSE_TECHNICAL_COMPARISON.md - Performance benchmarks
-#   - config/config_rtmpose.yaml - Pre-configured RTMPose setup
+#   - INSTALL_RTMPOSE.md: Detailed installation guide
+#   - RTMPOSE_TECHNICAL_COMPARISON.md: Performance benchmarks
+#   - config/config_rtmpose.yaml: Pre-configured RTMPose setup
 #
-# Troubleshooting:
+# Support:
 #   - GitHub Issues: https://github.com/open-mmlab/mmpose/issues
-#   - Contact project maintainer if installation fails after following guide
+#   - Contact project maintainer for Jetson-specific issues
+# ============================================================

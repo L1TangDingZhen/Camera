@@ -1,60 +1,93 @@
+# ============================================================
 # Life Tracker - Docker Compose for Jetson Orin Nano
-# Supports 3 modes: lite, balanced, performance
+# ============================================================
+# Platform: NVIDIA Jetson Orin Nano Super (8GB)
+# JetPack: 6.2.1 (R36.4.0)
+# Inference Method: YOLOv8 + RTMPose (GPU accelerated)
+#
+# Supports 3 performance modes:
+#   1. Lite:        640x480,  25-30 FPS, ~10W    (Power saving)
+#   2. Balanced:    1280x720, 20-25 FPS, ~15W    (Default, recommended)
+#   3. Performance: 1920x1080, 15-20 FPS, ~20-25W (High accuracy)
+#
 # Usage:
-#   docker-compose -f docker-compose.jetson.yml --profile balanced up
-#   docker-compose -f docker-compose.jetson.yml --profile lite up
-#   docker-compose -f docker-compose.jetson.yml --profile performance up
+#   docker-compose -f docker-compose.jetson.yml --profile balanced up      # Default
+#   docker-compose -f docker-compose.jetson.yml --profile lite up          # Power saving
+#   docker-compose -f docker-compose.jetson.yml --profile performance up   # High accuracy
+#   docker-compose -f docker-compose.jetson.yml --profile dashboard up     # Dashboard only
+#
+# Prerequisites:
+#   - JetPack 6.2.1+ installed on Jetson device
+#   - NVIDIA Container Runtime configured
+#   - Camera connected to /dev/video0
+#
+# Verify NVIDIA runtime:
+#   docker run --rm --runtime nvidia nvcr.io/nvidia/l4t-base:r36.4.0 nvcc --version
+# ============================================================
 
 version: '3.8'
 
 services:
+  # ============================================================
   # Balanced Mode (Default, Recommended)
+  # ============================================================
+  # Resolution: 1280x720
+  # Expected FPS: 20-25 FPS
+  # Power Consumption: ~15W
+  # Use Case: Best balance between performance and power efficiency
+  # ============================================================
   life-tracker-balanced:
-    image: life-tracker:jetson-mediapipe-balanced
+    image: life-tracker:jetson-balanced
     build:
       context: .
       dockerfile: Dockerfile.jetson
     container_name: life-tracker-balanced
     profiles: ["balanced"]
-    runtime: nvidia  # NVIDIA Container Runtime
+    runtime: nvidia
     restart: unless-stopped
 
-    # Device access
+    # Camera device access
     devices:
-      - /dev/video0:/dev/video0  # Camera
-      # Add more cameras if needed
-      # - /dev/video1:/dev/video1
+      - /dev/video0:/dev/video0
 
-    # Volumes for data persistence
+    # Data persistence
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
-      - ./config:/app/config
+      - ./data:/app/data              # SQLite database and logs
+      - ./logs:/app/logs              # Application logs
+      - ./models:/app/models          # YOLO + RTMPose models cache
+      - ./config:/app/config          # Configuration files
 
-    # Network
+    # Web dashboard port
     ports:
-      - "5000:5000"  # Web dashboard
+      - "5000:5000"
 
-    # Environment variables
+    # NVIDIA GPU configuration
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       - CONFIG_FILE=config/config_jetson_balanced.yaml
+      - PYTHONUNBUFFERED=1
 
-    # Command
+    # Run command
     command: python3 main.py --config config/config_jetson_balanced.yaml
 
-    # Logging
+    # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
+  # ============================================================
   # Lite Mode (Power Saving)
+  # ============================================================
+  # Resolution: 640x480
+  # Expected FPS: 25-30 FPS
+  # Power Consumption: ~10W
+  # Use Case: Battery-powered or heat-sensitive deployments
+  # ============================================================
   life-tracker-lite:
-    image: life-tracker:jetson-mediapipe-lite
+    image: life-tracker:jetson-lite
     build:
       context: .
       dockerfile: Dockerfile.jetson
@@ -63,34 +96,48 @@ services:
     runtime: nvidia
     restart: unless-stopped
 
+    # Camera device access
     devices:
       - /dev/video0:/dev/video0
 
+    # Data persistence
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
-      - ./config:/app/config
+      - ./data:/app/data              # SQLite database and logs
+      - ./logs:/app/logs              # Application logs
+      - ./models:/app/models          # YOLO + RTMPose models cache
+      - ./config:/app/config          # Configuration files
 
+    # Web dashboard port
     ports:
       - "5000:5000"
 
+    # NVIDIA GPU configuration
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       - CONFIG_FILE=config/config_jetson_lite.yaml
+      - PYTHONUNBUFFERED=1
 
+    # Run command
     command: python3 main.py --config config/config_jetson_lite.yaml
 
+    # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
+  # ============================================================
   # Performance Mode (High Accuracy)
+  # ============================================================
+  # Resolution: 1920x1080
+  # Expected FPS: 15-20 FPS
+  # Power Consumption: ~20-25W
+  # Use Case: Maximum accuracy, plugged-in deployment
+  # ============================================================
   life-tracker-performance:
-    image: life-tracker:jetson-mediapipe-performance
+    image: life-tracker:jetson-performance
     build:
       context: .
       dockerfile: Dockerfile.jetson
@@ -99,55 +146,99 @@ services:
     runtime: nvidia
     restart: unless-stopped
 
+    # Camera device access
     devices:
       - /dev/video0:/dev/video0
 
+    # Data persistence
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
-      - ./config:/app/config
+      - ./data:/app/data              # SQLite database and logs
+      - ./logs:/app/logs              # Application logs
+      - ./models:/app/models          # YOLO + RTMPose models cache
+      - ./config:/app/config          # Configuration files
 
+    # Web dashboard port
     ports:
       - "5000:5000"
 
+    # NVIDIA GPU configuration
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       - CONFIG_FILE=config/config_jetson_performance.yaml
+      - PYTHONUNBUFFERED=1
 
+    # Run command
     command: python3 main.py --config config/config_jetson_performance.yaml
 
+    # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Web Dashboard (Separate Service, Optional)
+  # ============================================================
+  # Dashboard Only Mode (Optional)
+  # ============================================================
+  # Use this to view statistics and analytics from collected data
+  # without running the main inference system.
+  # Useful for remote monitoring or when camera is unavailable.
+  # No GPU or camera required for this service.
+  # ============================================================
   dashboard:
-    image: life-tracker:jetson-mediapipe-balanced
+    image: life-tracker:jetson-balanced
     container_name: life-tracker-dashboard
     profiles: ["dashboard"]
     restart: unless-stopped
 
+    # Only need data access, no camera or GPU required
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
 
+    # Web dashboard port
     ports:
       - "5000:5000"
 
+    # Run dashboard only (no GPU needed)
     command: python3 web_dashboard.py
 
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "5m"
         max-file: "2"
 
-# Volumes (optional, for named volumes)
-volumes:
-  data:
-  logs:
-  models:
+# ============================================================
+# Named Volumes (Optional)
+# ============================================================
+# Uncomment to use Docker named volumes instead of bind mounts
+# volumes:
+#   data:
+#   logs:
+#   models:
+
+# ============================================================
+# Performance Tips
+# ============================================================
+# 1. Monitor power consumption:
+#    sudo jetson_clocks
+#    sudo jtop
+#
+# 2. Set power mode before running:
+#    sudo nvpmodel -m 0  # Maximum performance (25W)
+#    sudo nvpmodel -m 1  # Balanced (15W)
+#    sudo nvpmodel -m 2  # Power saving (10W)
+#
+# 3. Enable all CPU cores:
+#    sudo jetson_clocks
+#
+# 4. Monitor temperature:
+#    watch -n 1 cat /sys/devices/virtual/thermal/thermal_zone*/temp
+# ============================================================

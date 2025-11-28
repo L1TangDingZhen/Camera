@@ -93,11 +93,23 @@ tensorrt_conversion.log
 # ===================================
 # Office Document Lock Files & Temp Files
 # ===================================
+# Lock files
 .~lock.*
+~$*
+
+# Office documents (all formats)
 *.odt
 *.docx
 *.xlsx
-~$*
+*.pptx
+*.ods
+*.xls
+*.ppt
+*.doc
+
+# Specific debug documents
+debug*.odt
+debug*.docx
 
 # ===================================
 # Temporary & Cache Files

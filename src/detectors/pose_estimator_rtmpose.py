@@ -59,6 +59,8 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         # TensorRT配置
         self.tensorrt_config = config.get('tensorrt', {})
         self.use_tensorrt = self.tensorrt_config.get('enabled', False)
+        # AMP (Automatic Mixed Precision) - enabled by default for GPU
+        self.use_amp = config.get('use_amp', True)  # Default: True for automatic FP16 optimization
         self.use_fp16 = False  # Will be set by _apply_tensorrt_optimization
         self.use_tensorrt_engine = False  # Flag for native TensorRT engine
 
@@ -107,6 +109,7 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         print(f"[RTMPose]   配置文件: {self.config_file}")
         print(f"[RTMPose]   权重文件: {self.checkpoint}")
         print(f"[RTMPose]   设备: {self.device}")
+        print(f"[RTMPose]   AMP (混合精度): {'启用' if self.use_amp else '禁用'}")
         print(f"[RTMPose]   TensorRT: {'启用' if self.use_tensorrt else '禁用'}")
 
         try:
@@ -321,8 +324,9 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 h, w = frame.shape[:2]
                 bboxes = np.array([[0, 0, w, h]])
 
-            # 推理 (use autocast for FP16 compatibility)
-            if self.use_fp16:
+            # 推理 (use AMP autocast for automatic mixed precision)
+            # AMP is enabled by default for better GPU performance
+            if self.use_amp and 'cuda' in self.device:
                 with torch.amp.autocast('cuda', dtype=torch.float16):
                     results = self.inference_topdown(
                         self.model,

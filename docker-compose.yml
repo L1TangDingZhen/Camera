@@ -1,18 +1,166 @@
+# ============================================================
+# Life Tracker - Docker Compose for PC
+# ============================================================
+# Supports two deployment modes:
+#   1. CPU Mode:  YOLOv8 + MediaPipe (no GPU required)
+#   2. GPU Mode:  YOLOv8 + RTMPose (NVIDIA GPU required)
+#
+# Usage:
+#   docker-compose --profile cpu up              # CPU version
+#   docker-compose --profile gpu up              # GPU version
+#   docker-compose --profile dashboard up        # Dashboard only
+#
+# Prerequisites:
+#   - Docker 20.10+
+#   - Docker Compose 1.29+ (or docker-compose v2)
+#   - For GPU mode: NVIDIA Docker runtime (nvidia-docker2)
+#
+# Verify GPU support:
+#   docker run --rm --gpus all nvidia/cuda:12.2.0-runtime-ubuntu22.04 nvidia-smi
+# ============================================================
+
+version: '3.8'
+
 services:
-  life-tracker:
-    build: .
-    container_name: life-tracker
+  # ============================================================
+  # CPU Mode: YOLO + MediaPipe
+  # ============================================================
+  # Resolution: 1920x1080 (configurable)
+  # Expected FPS: 8-12 FPS
+  # Hardware: Any PC with webcam
+  # ============================================================
+  life-tracker-cpu:
+    image: life-tracker:cpu
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    container_name: life-tracker-cpu
+    profiles: ["cpu"]
+    restart: unless-stopped
+
+    # Camera device mapping (Linux only)
+    # For Windows/Mac: use video file or network stream in config
+    devices:
+      - /dev/video0:/dev/video0
+
+    # Data persistence
+    volumes:
+      - ./data:/app/data              # SQLite database and logs
+      - ./logs:/app/logs              # Application logs
+      - ./models:/app/models          # YOLO models cache
+      - ./config:/app/config          # Configuration files
+
+    # Web dashboard port
+    ports:
+      - "5000:5000"
+
+    # Environment variables
+    environment:
+      - CONFIG_FILE=config/config_cpu.yaml
+      - PYTHONUNBUFFERED=1
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================
+  # GPU Mode: YOLO + RTMPose
+  # ============================================================
+  # Resolution: 1920x1080 (configurable)
+  # Expected FPS: 25-30 FPS
+  # Hardware: PC with NVIDIA GPU (CUDA 12.2+)
+  # ============================================================
+  life-tracker-gpu:
+    image: life-tracker:gpu
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: life-tracker-gpu
+    profiles: ["gpu"]
+    restart: unless-stopped
+
+    # NVIDIA GPU access (Docker Compose v1.29+ format)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Camera device mapping (Linux only)
+    devices:
+      - /dev/video0:/dev/video0
+
+    # Data persistence
+    volumes:
+      - ./data:/app/data              # SQLite database and logs
+      - ./logs:/app/logs              # Application logs
+      - ./models:/app/models          # YOLO + RTMPose models cache
+      - ./config:/app/config          # Configuration files
+
+    # Web dashboard port
+    ports:
+      - "5000:5000"
+
+    # Environment variables
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      - CONFIG_FILE=config/config_gpu.yaml
+      - PYTHONUNBUFFERED=1
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================
+  # Dashboard Only Mode (Optional)
+  # ============================================================
+  # Use this to view statistics and analytics from collected data
+  # without running the main inference system.
+  # Useful for remote monitoring or when camera is unavailable.
+  # ============================================================
+  dashboard:
+    image: life-tracker:cpu
+    container_name: life-tracker-dashboard
+    profiles: ["dashboard"]
+    restart: unless-stopped
+
+    # Only need data access, no camera or GPU required
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      - ./models:/app/models
-      - ./config:/app/config
-    # 摄像头映射（仅Linux）
-    # Windows/Mac用户请使用视频文件测试或修改config中的camera.source
-    # devices:
-    #   - /dev/video0:/dev/video0
-    environment:
-      - DISPLAY=${DISPLAY:-}
+
+    # Web dashboard port
     ports:
       - "5000:5000"
-    restart: unless-stopped
+
+    # Run dashboard only (no inference)
+    command: python web_dashboard.py
+
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+# ============================================================
+# Named Volumes (Optional)
+# ============================================================
+# Uncomment to use Docker named volumes instead of bind mounts
+# volumes:
+#   data:
+#   logs:
+#   models:

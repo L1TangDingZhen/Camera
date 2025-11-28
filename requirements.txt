@@ -1,52 +1,53 @@
-# 核心依赖 - Python 3.8+
+# Life Tracker - Core Dependencies (Python 3.10+)
+# This file contains dependencies for CPU-only deployment
 
-# 深度学习框架
+# Deep Learning Framework
 torch>=2.0.0
 torchvision>=0.15.0
 ultralytics>=8.0.0  # YOLOv8
 
-# 姿态估计
+# Pose Estimation (CPU-friendly)
 mediapipe>=0.10.0
-# 注意: Windows下 mmcv-full/mmpose 可能安装失败，不影响CPU运行
-# GPU支持需要这些包（后续开发时安装）
-mmcv-full>=1.7.0
-mmpose>=1.0.0
-openmim>=0.3.0
 
-# 计算机视觉
+# Computer Vision
 opencv-python>=4.8.0
 opencv-contrib-python>=4.8.0
 numpy>=1.24.0
 pillow>=10.0.0
 
-# 数据处理
+# Data Processing
 pandas>=2.0.0
 scipy>=1.10.0
 
-# 机器学习 (用于SVM姿态分类器)
+# Machine Learning (SVM pose classifier)
 scikit-learn>=1.3.0
 
-# Web框架
+# Web Framework
 flask>=2.3.0
 flask-cors>=4.0.0
 
-# 时间序列预测
+# Time Series Prediction
 prophet>=1.1.0
 
-# 配置和日志
+# Configuration and Logging
 pyyaml>=6.0
 loguru>=0.7.0
 
-# 性能监控
+# Performance Monitoring
 psutil>=5.9.0
 tqdm>=4.65.0
 
-# 可视化
+# Visualization
 matplotlib>=3.7.0
 seaborn>=0.12.0
 plotly>=5.14.0
 
-# 工具
+# Utilities
 python-dotenv>=1.0.0
 
-# 注意: sqlite3 是Python标准库，无需安装
+# Note: sqlite3 is Python standard library, no installation needed
+# Note: For GPU support with RTMPose, install separately:
+#       pip install openmim
+#       mim install mmengine==0.8.0
+#       mim install mmcv==2.0.0
+#       mim install mmpose==1.0.0

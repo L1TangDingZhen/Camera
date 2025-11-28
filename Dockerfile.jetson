@@ -1,14 +1,58 @@
-FROM nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
+# ============================================================
+# Life Tracker - Jetson Orin Nano Dockerfile
+# ============================================================
+# Platform: NVIDIA Jetson Orin Nano Super (8GB)
+# JetPack: 6.2.1 (R36.4.0)
+# Kernel: 5.15.148-tegra
+# Python: 3.10.12
+# PyTorch: 2.8.0 (pre-installed in base image)
+# CUDA: 12.6
+# Inference Method: YOLOv8 + RTMPose (GPU accelerated)
+#
+# Prerequisites:
+#   - JetPack 6.2.1+ installed on Jetson device
+#   - NVIDIA Container Runtime configured
+#   - Camera connected to /dev/video0
+#
+# Build: docker build -f Dockerfile.jetson -t life-tracker:jetson .
+# Run:   docker run --rm -it --runtime nvidia --device /dev/video0 -p 5000:5000 life-tracker:jetson
+#
+# Performance Modes:
+#   - Lite:        640x480,  25-30 FPS, ~10W    (config_jetson_lite.yaml)
+#   - Balanced:    1280x720, 20-25 FPS, ~15W    (config_jetson_balanced.yaml, default)
+#   - Performance: 1920x1080, 15-20 FPS, ~20-25W (config_jetson_performance.yaml)
+# ============================================================
+
+# Base image from NVIDIA L4T (Linux for Tegra) with PyTorch pre-installed
+# This image includes:
+#   - Ubuntu 22.04 (aarch64)
+#   - Python 3.10.12
+#   - PyTorch 2.8.0 with CUDA 12.6 support
+#   - TorchVision 0.19.0
+#   - cuDNN 9.3, TensorRT 10.3
+#   - OpenCV 4.10.0
+FROM nvcr.io/nvidia/l4t-pytorch:r36.4.0-pth2.8-py3
 
 LABEL maintainer="Life Tracker Team"
-LABEL version="1.0.1-jetson-mediapipe"
+LABEL version="2.0.0-jetson"
+LABEL description="Life Tracker for Jetson Orin Nano - YOLO + RTMPose"
+LABEL inference.method="YOLOv8 + RTMPose"
+LABEL platform="Jetson Orin Nano"
+LABEL jetpack.version="6.2.1"
+LABEL pytorch.version="2.8.0"
+LABEL cuda.version="12.6"
+LABEL kernel.version="5.15.148-tegra"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 
 WORKDIR /app
 
-# Only install essential tools (not OpenCV, it's in base image)
+# Install essential system tools
+# Note: OpenCV, PyTorch, TorchVision are pre-installed in base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     wget \
@@ -17,28 +61,59 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip
-RUN python3 -m pip install --upgrade pip setuptools wheel
+# Upgrade pip and install build tools
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Copy requirements and install Python packages
-COPY requirements_jetson.txt /app/
+# Copy Jetson-specific requirements
+# Note: This file excludes PyTorch/TorchVision (already in base image)
+COPY requirements_jetson.txt .
+
+# Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements_jetson.txt
 
-# Copy application code
-COPY . /app/
+# Install RTMPose dependencies (mmcv, mmpose)
+# WARNING: This compilation step takes 20-40 minutes on Jetson
+# It's normal to see high CPU usage during this process
+# Current tested versions (2025-11-28): mmcv 2.1.0, mmengine 0.8.0, mmpose 1.1.0
+RUN echo "Installing RTMPose dependencies (this takes 20-40 minutes)..." && \
+    pip3 install --no-cache-dir openmim && \
+    mim install mmengine==0.8.0 && \
+    mim install mmcv==2.1.0 && \
+    mim install mmpose==1.1.0
 
-# Create directories
-RUN mkdir -p /app/data /app/logs /app/models /app/config
+# Verify RTMPose installation
+RUN python3 -c "import mmcv; print(f'mmcv: {mmcv.__version__}')" && \
+    python3 -c "import mmengine; print(f'mmengine: {mmengine.__version__}')" && \
+    python3 -c "import mmpose; print(f'mmpose: {mmpose.__version__}')"
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p data logs models config
 
 # Download YOLO models
-RUN cd /app/models && \
+RUN cd models && \
     wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt || true && \
-    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt || true && \
-    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt || true
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt || true
 
-# Set permissions
-RUN chmod +x /app/*.sh 2>/dev/null || true
+# Download RTMPose models
+# Note: If this fails during build, models will be auto-downloaded at runtime
+RUN mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/ || \
+    echo "Warning: RTMPose model download failed during build, will retry at runtime"
 
+# Set permissions for shell scripts
+RUN chmod +x scripts/*.sh 2>/dev/null || true
+
+# Expose web dashboard port
 EXPOSE 5000
 
+# Health check (longer start-period for Jetson warm-up)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python3 -c "import requests; requests.get('http://localhost:5000/api/health', timeout=5)" || exit 1
+
+# Default command: balanced mode (1280x720, 20-25 FPS, ~15W)
+# Override with different config for other modes:
+#   - Lite:        docker run ... life-tracker:jetson python3 main.py --config config/config_jetson_lite.yaml
+#   - Performance: docker run ... life-tracker:jetson python3 main.py --config config/config_jetson_performance.yaml
 CMD ["python3", "main.py", "--config", "config/config_jetson_balanced.yaml"]

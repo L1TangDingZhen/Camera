@@ -197,7 +197,7 @@ mim install mmpose==1.0.0
 #### Step 2: Download RTMPose Model
 
 ```bash
-python download_rtmpose_models.py --model rtmpose-s
+mim download mmpose --config rtmpose-s_8xb256-420e_coco-256x192 --dest models/rtmpose/
 ```
 
 #### Step 3: Modify Configuration File

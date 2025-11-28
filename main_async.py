@@ -62,6 +62,19 @@ class AsyncLifeTracker:
             'display_fps': 0
         }
 
+        # Detailed timing logs for final summary (controlled by config)
+        self.enable_profiling = self.config.get('debug', {}).get('performance_profiling', False)
+
+        if self.enable_profiling:
+            self.timing_history = {
+                'camera_read': [],
+                'detection': [],
+                'pose_estimation': [],
+                'state_machine': []
+            }
+        else:
+            self.timing_history = None
+
     def _signal_handler(self, signum, frame):
         """Handle Ctrl+C signal"""
         print("\n[Exit] Received termination signal...")
@@ -119,6 +132,13 @@ class AsyncLifeTracker:
         self.show_skeleton = self.config.get('debug', {}).get('show_skeleton', False)
         self.show_state_info = self.config.get('debug', {}).get('show_state_info', False)
 
+        # Pose estimation interval optimization
+        self.pose_interval = self.config.get('inference', {}).get('pose_interval', 1)
+        self.pose_frame_counter = 0
+        self.cached_keypoints = None
+        if self.pose_interval > 1:
+            print(f"[Optimization] Pose interval: every {self.pose_interval} frames (reduces RTMPose load by {(1-1/self.pose_interval)*100:.0f}%)")
+
         print("[Init] All components loaded!\n")
 
     # =====================================================================
@@ -131,10 +151,18 @@ class AsyncLifeTracker:
         fps_time = time.time()
 
         while self.running:
+            t0 = time.time()
             ret, frame = self.cap.read()
+            t1 = time.time()
+
             if not ret:
                 print("[Camera] Failed to read frame")
                 break
+
+            # Record timing
+            if self.enable_profiling:
+                read_time_ms = (t1 - t0) * 1000
+                self.timing_history['camera_read'].append(read_time_ms)
 
             # Non-blocking put (drop frame if queue is full to maintain real-time)
             try:
@@ -188,7 +216,10 @@ class AsyncLifeTracker:
                     t0 = time.time()
                     bbox = self.person_detector.detect(frame)
                     t1 = time.time()
-                    timings['detect'].append((t1 - t0) * 1000)
+                    detect_time = (t1 - t0) * 1000
+                    timings['detect'].append(detect_time)
+                    if self.enable_profiling:
+                        self.timing_history['detection'].append(detect_time)
                     cached_bbox = bbox
                 else:
                     # Reuse cached bbox for intermediate frames
@@ -260,14 +291,34 @@ class AsyncLifeTracker:
 
                 frame_count += 1
 
-                # Estimate pose
+                # Estimate pose with interval optimization
                 keypoints = None
                 world_landmarks = None
                 if bbox is not None:
-                    t0 = time.time()
-                    keypoints = self.pose_estimator.estimate(frame, bbox)
-                    t1 = time.time()
-                    timings['estimate'].append((t1 - t0) * 1000)
+                    # Increment pose counter only when person is detected
+                    self.pose_frame_counter += 1
+                    # Check if we should run RTMPose or use cached result
+                    should_estimate = (self.pose_frame_counter % self.pose_interval == 1)
+
+                    if should_estimate:
+                        # Run RTMPose estimation
+                        t0 = time.time()
+                        keypoints = self.pose_estimator.estimate(frame, bbox)
+                        t1 = time.time()
+                        pose_time = (t1 - t0) * 1000
+                        timings['estimate'].append(pose_time)
+                        if self.enable_profiling:
+                            self.timing_history['pose_estimation'].append(pose_time)
+
+                        # Cache the result
+                        self.cached_keypoints = keypoints
+                    else:
+                        # Use cached keypoints
+                        keypoints = self.cached_keypoints
+                        # Record 0ms for cached frames
+                        timings['estimate'].append(0.0)
+                        if self.enable_profiling:
+                            self.timing_history['pose_estimation'].append(0.0)
 
                     if hasattr(self.pose_estimator, 'get_world_landmarks'):
                         world_landmarks = self.pose_estimator.get_world_landmarks()
@@ -336,9 +387,10 @@ class AsyncLifeTracker:
         # Create window
         if self.show_visualization:
             cv2.namedWindow('Life Tracker - Async', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Life Tracker - Async',
-                           self.config['camera']['resolution'][0],
-                           self.config['camera']['resolution'][1])
+            # Display window size: 1280x720 for comfortable viewing (regardless of camera resolution)
+            display_width = 1280
+            display_height = 720
+            cv2.resizeWindow('Life Tracker - Async', display_width, display_height)
 
         while self.running:
             try:
@@ -358,7 +410,10 @@ class AsyncLifeTracker:
                 t0 = time.time()
                 events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
                 t1 = time.time()
-                timings['state_machine'].append((t1 - t0) * 1000)
+                state_time = (t1 - t0) * 1000
+                timings['state_machine'].append(state_time)
+                if self.enable_profiling:
+                    self.timing_history['state_machine'].append(state_time)
 
                 # Log events
                 if events:
@@ -429,10 +484,6 @@ class AsyncLifeTracker:
         """Draw visualization on frame"""
         vis_frame = frame.copy()
 
-        # Draw FPS
-        cv2.putText(vis_frame, f"FPS: {fps:.1f}", (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
         # Draw bbox
         if bbox is not None:
             x1, y1, x2, y2 = map(int, bbox[:4])
@@ -450,33 +501,58 @@ class AsyncLifeTracker:
         if keypoints is not None and self.show_skeleton:
             self._draw_skeleton(vis_frame, keypoints)
 
-        # Draw state info
+        # Draw state info (async original style - thinner font)
         if self.show_state_info:
+            y_offset = 30
+            line_height = 35
+            font_scale = 0.7
+            font_thickness = 2
+
+            # FPS
+            cv2.putText(vis_frame, f"FPS: {fps:.1f}", (20, y_offset),
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), font_thickness)
+            y_offset += line_height
+
+            # State with color coding
             state = self.state_machine.current_state
-            cv2.putText(vis_frame, f"State: {state}", (10, 70),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            state_value = state.value if hasattr(state, 'value') else str(state)
+            state_color = {
+                'sitting': (0, 255, 255),  # Yellow
+                'lying': (0, 0, 255),      # Red
+                'standing': (0, 255, 0),   # Green
+                'sleeping': (255, 0, 0),   # Blue
+                'absent': (128, 128, 128), # Gray
+            }.get(state_value, (255, 255, 255))
+
+            cv2.putText(vis_frame, f"State: {state_value}", (20, y_offset),
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, state_color, font_thickness)
+            y_offset += line_height
+
+            # Zone
+            zone = self.state_machine.current_zone or "None"
+            cv2.putText(vis_frame, f"Zone: {zone}", (20, y_offset),
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
+            y_offset += line_height
+
+            # Duration
+            duration = self.state_machine.get_state_duration(time.time())
+            cv2.putText(vis_frame, f"Duration: {duration:.1f}s", (20, y_offset),
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 0), font_thickness)
+            y_offset += line_height
 
         return vis_frame
 
     def _draw_skeleton(self, frame, keypoints):
-        """Draw skeleton connections"""
-        # COCO-17 skeleton connections
-        skeleton = [
-            (0, 1), (0, 2), (1, 3), (2, 4),  # Head
-            (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),  # Arms
-            (5, 11), (6, 12), (11, 12),  # Torso
-            (11, 13), (13, 15), (12, 14), (14, 16)  # Legs
-        ]
+        """Draw skeleton connections (same style as main.py)"""
+        from src.detectors.base import Keypoint
 
-        for i, j in skeleton:
-            if i < len(keypoints) and j < len(keypoints):
-                pt1 = keypoints[i]
-                pt2 = keypoints[j]
-                if len(pt1) >= 3 and len(pt2) >= 3:
-                    if pt1[2] > 0.3 and pt2[2] > 0.3:
-                        x1, y1 = int(pt1[0]), int(pt1[1])
-                        x2, y2 = int(pt2[0]), int(pt2[1])
-                        cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # Use Keypoint.get_connections() for consistency with main.py
+        connections = Keypoint.get_connections()
+        for idx1, idx2 in connections:
+            if keypoints[idx1, 2] > 0.3 and keypoints[idx2, 2] > 0.3:
+                x1, y1 = keypoints[idx1, :2].astype(int)
+                x2, y2 = keypoints[idx2, :2].astype(int)
+                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Blue color like main.py
 
     # =====================================================================
     # Main run method
@@ -508,12 +584,88 @@ class AsyncLifeTracker:
         for t in threads:
             t.join(timeout=2.0)
 
+        # Print final performance summary
+        self._print_performance_summary()
+
         # Cleanup
         self.cap.release()
         if self.show_visualization:
             cv2.destroyAllWindows()
 
         print("[Run] Program exited\n")
+
+    def _print_performance_summary(self):
+        """Print detailed performance summary at the end"""
+        # Skip detailed profiling if disabled
+        if not self.enable_profiling:
+            print("\n[Performance] Profiling disabled (set debug.performance_profiling: true to enable)")
+            return
+
+        print("\n" + "="*70)
+        print("PERFORMANCE SUMMARY")
+        print("="*70)
+
+        # Camera info
+        camera_config = self.config['camera']
+        print(f"\nCamera Configuration:")
+        print(f"  Resolution: {camera_config['resolution'][0]}x{camera_config['resolution'][1]}")
+        print(f"  Target FPS: {camera_config['fps']}")
+        print(f"  Encoding: MJPEG (forced)")
+
+        # Pipeline stats
+        print(f"\nPipeline Configuration:")
+        print(f"  Mode: Asynchronous 4-thread")
+        print(f"  Detection Interval: {self.config['inference'].get('detection_interval', 3)}")
+
+        # Detailed timing statistics
+        print(f"\n{'Stage':<20} {'Count':<10} {'Avg (ms)':<12} {'Min (ms)':<12} {'Max (ms)':<12}")
+        print("-" * 70)
+
+        for stage_name, display_name in [
+            ('camera_read', 'Camera Read'),
+            ('detection', 'YOLO Detection'),
+            ('pose_estimation', 'RTMPose Pose'),
+            ('state_machine', 'State Machine')
+        ]:
+            timings = self.timing_history[stage_name]
+            if len(timings) > 0:
+                avg = np.mean(timings)
+                min_val = np.min(timings)
+                max_val = np.max(timings)
+                count = len(timings)
+                print(f"{display_name:<20} {count:<10} {avg:<12.2f} {min_val:<12.2f} {max_val:<12.2f}")
+            else:
+                print(f"{display_name:<20} {'0':<10} {'-':<12} {'-':<12} {'-':<12}")
+
+        # Calculate theoretical FPS
+        if len(self.timing_history['pose_estimation']) > 0:
+            avg_camera = np.mean(self.timing_history['camera_read']) if self.timing_history['camera_read'] else 0
+            avg_detection = np.mean(self.timing_history['detection']) if self.timing_history['detection'] else 0
+            avg_pose = np.mean(self.timing_history['pose_estimation']) if self.timing_history['pose_estimation'] else 0
+            avg_state = np.mean(self.timing_history['state_machine']) if self.timing_history['state_machine'] else 0
+
+            # Bottleneck is the slowest stage
+            bottleneck = max(avg_pose, avg_detection)
+            theoretical_fps = 1000.0 / bottleneck if bottleneck > 0 else 0
+
+            print(f"\n{'Metric':<30} {'Value':<15}")
+            print("-" * 50)
+            print(f"{'Bottleneck Stage':<30} {'RTMPose' if avg_pose > avg_detection else 'YOLO Detection':<15}")
+            print(f"{'Bottleneck Time (ms)':<30} {bottleneck:<15.2f}")
+            print(f"{'Theoretical Max FPS':<30} {theoretical_fps:<15.1f}")
+            print(f"{'Actual Display FPS':<30} {self.stats['display_fps']:<15d}")
+
+            # Performance breakdown
+            total_processing = avg_camera + avg_detection + avg_pose + avg_state
+            print(f"\n{'Stage':<30} {'% of Total':<15}")
+            print("-" * 50)
+            if total_processing > 0:
+                print(f"{'Camera Read':<30} {(avg_camera/total_processing*100):<15.1f}")
+                print(f"{'YOLO Detection':<30} {(avg_detection/total_processing*100):<15.1f}")
+                print(f"{'RTMPose Pose':<30} {(avg_pose/total_processing*100):<15.1f}")
+                print(f"{'State Machine':<30} {(avg_state/total_processing*100):<15.1f}")
+
+        print("\n" + "="*70 + "\n")
 
 
 def main():

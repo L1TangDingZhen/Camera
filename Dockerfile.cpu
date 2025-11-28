@@ -1,0 +1,64 @@
+# ============================================================
+# Life Tracker - CPU Version Dockerfile
+# ============================================================
+# Platform: PC (x86_64/amd64)
+# Python: 3.10
+# Inference Method: YOLOv8 + MediaPipe
+# GPU Required: No
+#
+# Build: docker build -f Dockerfile.cpu -t life-tracker:cpu .
+# Run:   docker run --rm -it --device /dev/video0 -p 5000:5000 life-tracker:cpu
+# ============================================================
+
+FROM python:3.10-slim
+
+LABEL maintainer="Life Tracker Team"
+LABEL version="2.0.0-cpu"
+LABEL description="Life Tracker CPU version - YOLO + MediaPipe"
+LABEL inference.method="YOLOv8 + MediaPipe"
+LABEL gpu.required="false"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies for OpenCV and multimedia
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    ffmpeg \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p data logs models config
+
+# Download YOLOv8 models
+RUN cd models && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt && \
+    wget -q https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt
+
+# Expose web dashboard port
+EXPOSE 5000
+
+# Health check (check if Flask server is responsive)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5000/api/health', timeout=5)" || exit 1
+
+# Default command: run with CPU config in headless mode
+CMD ["python", "main.py", "--config", "config/config_cpu.yaml", "--no-vis"]

@@ -4,10 +4,13 @@
 """
 
 import time
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, TYPE_CHECKING
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
-from ..state.behavior_state import BehaviorState
+
+# 使用TYPE_CHECKING避免循环导入
+if TYPE_CHECKING:
+    from ..state.behavior_state import BehaviorState
 
 
 @dataclass
@@ -55,7 +58,7 @@ class SessionTracker:
         self._today_cache: Optional[Dict] = None
         self._cache_date: Optional[str] = None
 
-    def start_session(self, state: BehaviorState, timestamp: float, zone: Optional[str] = None):
+    def start_session(self, state: 'BehaviorState', timestamp: float, zone: Optional[str] = None):
         """开始新的活动会话
 
         Args:
@@ -67,14 +70,17 @@ class SessionTracker:
         if self.current_session is not None and self.current_session.is_active():
             self.end_session(timestamp)
 
+        # 获取状态值（兼容枚举和字符串）
+        state_value = state.value if hasattr(state, 'value') else str(state)
+
         # 创建新会话
         self.current_session = ActivitySession(
-            state=state.value,
+            state=state_value,
             start_time=timestamp,
             zone=zone
         )
 
-        print(f"[SessionTracker] 开始 {state.value} 会话 @ {datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')}")
+        print(f"[SessionTracker] 开始 {state_value} 会话 @ {datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')}")
 
     def end_session(self, timestamp: float):
         """结束当前会话
@@ -110,7 +116,7 @@ class SessionTracker:
         # 清空当前会话
         self.current_session = None
 
-    def update_session(self, state: BehaviorState, timestamp: float, zone: Optional[str] = None):
+    def update_session(self, state: 'BehaviorState', timestamp: float, zone: Optional[str] = None):
         """更新会话（状态变化时调用）
 
         Args:
@@ -118,14 +124,15 @@ class SessionTracker:
             timestamp: 时间戳
             zone: 当前区域
         """
-        # 忽略UNKNOWN和ABSENT状态
-        if state in [BehaviorState.UNKNOWN, BehaviorState.ABSENT]:
+        # 忽略UNKNOWN和ABSENT状态（使用字符串比较避免循环导入）
+        state_value = state.value if hasattr(state, 'value') else str(state)
+        if state_value in ['unknown', 'absent']:
             if self.current_session is not None and self.current_session.is_active():
                 self.end_session(timestamp)
             return
 
         # 检查状态是否变化
-        if self.current_session is None or self.current_session.state != state.value:
+        if self.current_session is None or self.current_session.state != state_value:
             # 状态变化，开始新会话
             self.start_session(state, timestamp, zone)
         else:

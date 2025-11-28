@@ -25,9 +25,10 @@ except ImportError:
 try:
     from ..analytics.session_tracker import SessionTracker
     SESSION_TRACKER_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     SESSION_TRACKER_AVAILABLE = False
-    print("[WARN] SessionTracker模块未找到，时长统计功能将不可用")
+    print(f"[WARN] SessionTracker模块导入失败: {e}")
+    print("[WARN] 时长统计功能将不可用")
 
 
 class BehaviorState(Enum):
