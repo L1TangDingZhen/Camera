@@ -49,7 +49,7 @@ class DataCollectorRTMPose:
 
         # Initialize person detector
         print("[INFO] Initializing YOLOv8 person detector...")
-        self.person_detector = PersonDetector(self.config)
+        self.person_detector = PersonDetector(self.config['models']['person'])
 
         # Initialize RTMPose
         print("[INFO] Initializing RTMPose pose estimator...")

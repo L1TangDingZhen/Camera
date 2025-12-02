@@ -242,33 +242,58 @@ class TensorRTRTMPose:
 
         return np.array([x1_new, y1_new, x2_new, y2_new])
 
-    def _get_affine_transform(self, center, scale, rot, output_size):
+    def _get_warp_matrix(self, center, scale, rot, output_size, inv=False):
         """
-        Get affine transformation matrix (from MMPose)
+        Get affine transformation matrix matching MMPose's get_warp_matrix exactly.
+
+        Args:
+            center: bbox center (x, y)
+            scale: bbox scale (w, h) after padding
+            rot: rotation angle in degrees
+            output_size: target size (w, h)
+            inv: if True, return inverse transform (dst->src)
+
+        Returns:
+            2x3 affine transformation matrix
         """
         import cv2
+        import math
 
-        shift = np.array([0, 0], dtype=np.float32)
+        def _rotate_point(pt, angle_rad):
+            """Rotate a point by an angle."""
+            sn, cs = np.sin(angle_rad), np.cos(angle_rad)
+            new_x = pt[0] * cs - pt[1] * sn
+            new_y = pt[0] * sn + pt[1] * cs
+            return np.array([new_x, new_y], dtype=np.float32)
+
+        def _get_3rd_point(a, b):
+            """Get 3rd point for affine transform (perpendicular)."""
+            direction = a - b
+            return b + np.array([-direction[1], direction[0]], dtype=np.float32)
+
         src_w = scale[0]
-        dst_w = output_size[0]
-        dst_h = output_size[1]
+        dst_w, dst_h = output_size
 
-        rot_rad = np.pi * rot / 180
-        src_dir = np.array([0, src_w * -0.5], dtype=np.float32)
-        dst_dir = np.array([0, dst_w * -0.5], dtype=np.float32)
+        rot_rad = np.deg2rad(rot)
+        src_dir = _rotate_point(np.array([0., src_w * -0.5], dtype=np.float32), rot_rad)
+        dst_dir = np.array([0., dst_w * -0.5], dtype=np.float32)
 
         src = np.zeros((3, 2), dtype=np.float32)
+        src[0, :] = center
+        src[1, :] = center + src_dir
+        src[2, :] = _get_3rd_point(src[0, :], src[1, :])
+
         dst = np.zeros((3, 2), dtype=np.float32)
-        src[0, :] = center + scale * shift
-        src[1, :] = center + src_dir + scale * shift
         dst[0, :] = [dst_w * 0.5, dst_h * 0.5]
         dst[1, :] = np.array([dst_w * 0.5, dst_h * 0.5]) + dst_dir
+        dst[2, :] = _get_3rd_point(dst[0, :], dst[1, :])
 
-        src[2:, :] = self._get_3rd_point(src[0, :], src[1, :])
-        dst[2:, :] = self._get_3rd_point(dst[0, :], dst[1, :])
+        if inv:
+            warp_mat = cv2.getAffineTransform(dst.astype(np.float32), src.astype(np.float32))
+        else:
+            warp_mat = cv2.getAffineTransform(src.astype(np.float32), dst.astype(np.float32))
 
-        trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
-        return trans
+        return warp_mat
 
     def _get_3rd_point(self, a, b):
         """Get 3rd point for affine transform"""
@@ -277,7 +302,7 @@ class TensorRTRTMPose:
 
     def preprocess(self, img: np.ndarray, bbox: np.ndarray) -> np.ndarray:
         """
-        Preprocess image for RTMPose inference (simplified, compatible)
+        Preprocess image for RTMPose inference (完全匹配MMPose的预处理)
 
         Args:
             img: Input image (H, W, 3) in BGR format
@@ -288,28 +313,43 @@ class TensorRTRTMPose:
         """
         import cv2
 
-        # Expand bbox with 1.25x padding (like MMPose)
-        expanded_bbox = self._expand_bbox(bbox, img.shape[:2], padding=1.25)
-        x1, y1, x2, y2 = [int(v) for v in expanded_bbox]
+        # 从bbox计算center和scale（匹配MMPose的bbox_xyxy2cs）
+        x1, y1, x2, y2 = bbox[:4]
+        center = np.array([(x1 + x2) / 2, (y1 + y2) / 2], dtype=np.float32)
 
-        # Crop expanded region
-        person_img = img[y1:y2, x1:x2]
+        # Scale = bbox dimensions * padding
+        padding = 1.25
+        w = (x2 - x1) * padding
+        h = (y2 - y1) * padding
 
-        if person_img.size == 0:
-            # Return zero tensor if crop failed
-            return np.zeros((1, 3, *self.input_size), dtype=np.float32)
+        # 调整aspect ratio（匹配MMPose的TopdownAffine._fix_aspect_ratio）
+        aspect_ratio = self.input_size[1] / self.input_size[0]  # 192/256 = 0.75
+        if w > h * aspect_ratio:
+            scale = np.array([w, w / aspect_ratio], dtype=np.float32)
+        else:
+            scale = np.array([h * aspect_ratio, h], dtype=np.float32)
 
-        # Resize to input size (W, H)
-        resized = cv2.resize(person_img, (self.input_size[1], self.input_size[0]))
+        # 保存center和scale用于后处理
+        self._last_center = center
+        self._last_scale = scale
 
-        # Keep BGR format (MMPose expects BGR, mean/std are in BGR order)
-        # DO NOT convert to RGB!
+        # 获取仿射变换矩阵（使用MMPose的get_warp_matrix）
+        output_size = (self.input_size[1], self.input_size[0])  # (W, H) = (192, 256)
+        trans = self._get_warp_matrix(center, scale, 0, output_size, inv=False)
 
-        # Normalize (input is BGR, mean/std are in BGR order)
-        normalized = (resized.astype(np.float32) - self.mean) / self.std
+        # 使用仿射变换裁剪和缩放图像
+        warped = cv2.warpAffine(
+            img,
+            trans,
+            output_size,
+            flags=cv2.INTER_LINEAR
+        )
 
-        # Store bbox for postprocessing
-        self._last_bbox_expanded = expanded_bbox
+        # 转换BGR到RGB（ImageNet标准）
+        warped_rgb = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
+
+        # Normalize (ImageNet RGB mean/std)
+        normalized = (warped_rgb.astype(np.float32) - self.mean) / self.std
 
         # HWC -> CHW
         transposed = normalized.transpose(2, 0, 1)
@@ -322,7 +362,7 @@ class TensorRTRTMPose:
 
     def postprocess(self, outputs: dict, bbox: np.ndarray, img_shape: Tuple[int, int]) -> np.ndarray:
         """
-        Postprocess RTMPose outputs (simplified)
+        Postprocess RTMPose outputs (使用MMPose标准的仿射变换逆矩阵)
 
         Args:
             outputs: TensorRT engine outputs
@@ -332,27 +372,32 @@ class TensorRTRTMPose:
         Returns:
             Keypoints in COCO format (17, 3) [x, y, confidence]
         """
-        # RTMPose outputs: 'output' and potentially '501' (intermediate features)
-        # We need the final output which should be shape (1, 17, 384) - SimCC format
+        import cv2
 
-        if 'output' in outputs:
+        # RTMPose outputs: SimCC format (X and Y distributions)
+        # 新版engine: 'simcc_x' / 'simcc_y'
+        # 旧版engine: 'output' / '501'
+
+        # 尝试新版输出名称
+        if 'simcc_x' in outputs:
+            simcc_x = outputs['simcc_x']  # (1, 17, 384) - x coordinates
+            simcc_y = outputs['simcc_y']  # (1, 17, 512) - y coordinates
+        # 尝试旧版输出名称
+        elif 'output' in outputs:
             simcc_x = outputs['output']  # (1, 17, 384) - x coordinates
+            simcc_y = outputs.get('501', outputs['output'])  # (1, 17, 512) - y coordinates
+        # 通用fallback
         else:
-            # Use first output
-            simcc_x = list(outputs.values())[0]
+            output_list = list(outputs.values())
+            simcc_x = output_list[0]
+            simcc_y = output_list[1] if len(output_list) > 1 else output_list[0]
 
-        if '501' in outputs:
-            simcc_y = outputs['501']  # (1, 17, 512) - y coordinates
-        else:
-            # If only one output, duplicate for y (fallback)
-            simcc_y = simcc_x
-
-        # Decode SimCC predictions with softmax (temperature to sharpen peaks)
+        # Decode SimCC predictions
         batch_size, num_keypoints, _ = simcc_x.shape
         x_logits = simcc_x[0]
         y_logits = simcc_y[0]
 
-        # Argmax decode (consistent with原始实现)
+        # Argmax decode
         x_coords = np.argmax(x_logits, axis=-1)
         y_coords = np.argmax(y_logits, axis=-1)
 
@@ -361,27 +406,28 @@ class TensorRTRTMPose:
         y_scores = np.max(y_logits, axis=-1)
         scores = np.sqrt(x_scores * y_scores)
 
-        # Convert from SimCC coordinates to pixel coordinates in resized image
-        # SimCC uses 384 bins for x, 512 bins for y (for 192x256 input)
-        x_scale = self.input_size[1] / simcc_x.shape[-1]  # 192 / 384 = 0.5
-        y_scale = self.input_size[0] / simcc_y.shape[-1]  # 256 / 512 = 0.5
+        # SimCC坐标映射到模型输入图像坐标
+        # RTMPose的SimCC: simcc_split_ratio = 2.0
+        simcc_split_ratio = 2.0
+        x_coords_img = x_coords.astype(np.float32) / simcc_split_ratio
+        y_coords_img = y_coords.astype(np.float32) / simcc_split_ratio
 
-        x_pixels = x_coords * x_scale  # In resized image (192 width)
-        y_pixels = y_coords * y_scale  # In resized image (256 height)
+        # 获取仿射变换逆矩阵（使用MMPose的get_warp_matrix，inv=True）
+        center = self._last_center
+        scale = self._last_scale
+        output_size = (self.input_size[1], self.input_size[0])  # (W, H) = (192, 256)
 
-        # Map back to expanded bbox coordinates
-        expanded_bbox = self._last_bbox_expanded
-        x1, y1, x2, y2 = expanded_bbox
+        # 直接获取逆矩阵，避免数值误差
+        trans_inv = self._get_warp_matrix(center, scale, 0, output_size, inv=True)
 
-        bbox_w = x2 - x1
-        bbox_h = y2 - y1
-
-        # Scale from resized image to expanded bbox
-        x_original = x1 + (x_pixels / self.input_size[1]) * bbox_w
-        y_original = y1 + (y_pixels / self.input_size[0]) * bbox_h
-
-        # Combine into (17, 3) format
-        keypoints = np.stack([x_original, y_original, scores], axis=-1)
+        # 将每个关键点映射回原图坐标
+        keypoints = np.zeros((num_keypoints, 3), dtype=np.float32)
+        for i in range(num_keypoints):
+            pt = np.array([x_coords_img[i], y_coords_img[i], 1.0])
+            pt_transformed = trans_inv @ pt
+            keypoints[i, 0] = pt_transformed[0]
+            keypoints[i, 1] = pt_transformed[1]
+            keypoints[i, 2] = scores[i]
 
         return keypoints
 

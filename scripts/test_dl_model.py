@@ -35,7 +35,7 @@ class ModelTester:
         with open(config_path, encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
-        self.person_detector = PersonDetector(self.config)
+        self.person_detector = PersonDetector(self.config['models']['person'])
         self.pose_estimator = MediaPipePoseEstimator(self.config)
 
     def test_realtime(self, model_path, model_type='lstm', compare_svm=False):

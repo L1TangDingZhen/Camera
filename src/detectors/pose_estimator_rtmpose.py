@@ -63,6 +63,10 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         self.use_amp = config.get('use_amp', True)  # Default: True for automatic FP16 optimization
         self.use_fp16 = False  # Will be set by _apply_tensorrt_optimization
         self.use_tensorrt_engine = False  # Flag for native TensorRT engine
+        self.use_mmdeploy_engine = False  # Flag for MMDeploy TensorRT
+
+        # MMDeploy配置
+        self.deploy_cfg = config.get('deploy_cfg', None)
 
         # 自动构建config和checkpoint路径
         if self.config_file is None or self.checkpoint is None:
@@ -75,10 +79,20 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         if self.checkpoint.endswith('.engine'):
             print(f"[RTMPose] 检测到TensorRT引擎文件")
             print(f"[RTMPose] 正在加载TensorRT引擎: {self.checkpoint}")
-            self.use_tensorrt_engine = True
-            self._load_tensorrt_engine()
-            print(f"[RTMPose] TensorRT引擎加载成功 ✓")
-            return
+
+            # 如果有deploy_cfg，使用MMDeploy模式
+            if self.deploy_cfg and Path(self.deploy_cfg).exists():
+                print(f"[RTMPose] 检测到 deploy_cfg，使用 MMDeploy 模式")
+                self.use_mmdeploy_engine = True
+                self._load_mmdeploy_engine()
+                print(f"[RTMPose] MMDeploy 引擎加载成功 ✓")
+                return
+            else:
+                # 否则使用 Standalone 模式
+                self.use_tensorrt_engine = True
+                self._load_tensorrt_engine()
+                print(f"[RTMPose] Standalone TensorRT 引擎加载成功 ✓")
+                return
 
         # 只有非TensorRT引擎模式才需要mmpose
         try:
@@ -169,6 +183,36 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             raise RuntimeError(
                 f"Failed to load TensorRT engine: {e}\n"
                 f"Engine file: {self.checkpoint}"
+            )
+
+    def _load_mmdeploy_engine(self):
+        """Load MMDeploy TensorRT engine (official deployment method)"""
+        try:
+            from mmdeploy.apis import inference_model
+
+            print(f"[RTMPose] 使用 MMDeploy TensorRT 模式（官方部署方式）")
+            print(f"[RTMPose]   Engine: {self.checkpoint}")
+            print(f"[RTMPose]   Deploy Config: {self.deploy_cfg}")
+
+            # Store inference function and configs
+            self.mmdeploy_inference = inference_model
+            self.mmdeploy_engine = self.checkpoint
+            self.mmdeploy_deploy_cfg = self.deploy_cfg
+
+            print(f"[RTMPose] MMDeploy 引擎已加载")
+
+        except ImportError as e:
+            raise ImportError(
+                f"MMDeploy 未安装！\n\n"
+                f"安装方法：\n"
+                f"  pip install mmdeploy\n\n"
+                f"错误信息: {e}"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load MMDeploy engine: {e}\n"
+                f"Engine file: {self.checkpoint}\n"
+                f"Deploy config: {self.deploy_cfg}"
             )
 
     def _get_model_paths(self, model_name: str) -> tuple:
@@ -293,6 +337,66 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         start_time = time.time()
 
         try:
+            # MMDeploy TensorRT inference (official deployment)
+            if self.use_mmdeploy_engine:
+                if bbox is None:
+                    h, w = frame.shape[:2]
+                    bbox = np.array([0, 0, w, h, 1.0])
+
+                try:
+                    # MMDeploy inference
+                    # Format: [{'bbox': [x1, y1, x2, y2]}]
+                    results = self.mmdeploy_inference(
+                        self.mmdeploy_engine,
+                        self.mmdeploy_deploy_cfg,
+                        frame,
+                        bboxes=np.array([[bbox[0], bbox[1], bbox[2], bbox[3]]])
+                    )
+
+                    # Extract keypoints from MMDeploy results
+                    if results and len(results) > 0:
+                        result = results[0]
+
+                        # MMDeploy returns dict with 'keypoints' and 'keypoint_scores'
+                        if isinstance(result, dict):
+                            kpts = result.get('keypoints', None)
+                            scores = result.get('keypoint_scores', None)
+
+                            if kpts is not None and scores is not None:
+                                # Ensure correct shapes
+                                if len(kpts.shape) == 3:
+                                    kpts = kpts[0]  # (1, 17, 2) -> (17, 2)
+                                if len(scores.shape) == 2:
+                                    scores = scores[0]  # (1, 17) -> (17,)
+
+                                # Combine to (17, 3)
+                                keypoints = np.concatenate([
+                                    kpts,
+                                    scores[:, np.newaxis]
+                                ], axis=1)
+                            else:
+                                return None
+                        else:
+                            # Fallback for different result formats
+                            return None
+                    else:
+                        return None
+
+                    # Apply keypoint smoothing
+                    keypoints = self._apply_keypoint_smoothing(keypoints)
+
+                    # Record inference time
+                    inference_time = time.time() - start_time
+                    self.inference_times.append(inference_time)
+                    if len(self.inference_times) > 100:
+                        self.inference_times.pop(0)
+
+                    return keypoints
+
+                except Exception as e:
+                    print(f"[RTMPose] MMDeploy inference failed: {e}")
+                    return None
+
             # Standalone TensorRT inference (no MMPose dependency)
             if self.use_tensorrt_engine:
                 # Use standalone TensorRT wrapper

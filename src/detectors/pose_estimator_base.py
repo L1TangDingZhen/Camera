@@ -190,12 +190,6 @@ class PoseEstimatorFactory:
                    优点: GPU加速，精度更高，支持TensorRT
                    适用: Jetson部署、GPU生产环境
 
-    - 'vitpose':   ViTPose (高精度)
-                   速度: ~25ms (GPU)
-                   精度: AP ~75%
-                   优点: 最高精度
-                   适用: 精度要求极高的场景
-
     如何切换：
     在配置文件 (config/config_gpu.yaml) 中修改：
 
@@ -232,13 +226,9 @@ class PoseEstimatorFactory:
             from .pose_estimator_rtmpose import RTMPoseEstimator
             return RTMPoseEstimator(config)
 
-        elif backend == 'vitpose':
-            from .pose_estimator_vitpose import ViTPoseEstimator
-            return ViTPoseEstimator(config)
-
         else:
             raise ValueError(
                 f"不支持的姿态估计后端: {backend}\n"
-                f"支持的后端: mediapipe, rtmpose, vitpose\n"
+                f"支持的后端: mediapipe, rtmpose\n"
                 f"请检查配置文件中的 models.pose.backend 字段"
             )

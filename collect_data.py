@@ -5,11 +5,14 @@ Data Collection Tool - Collect sitting/standing/lying pose training data
 Supports both MediaPipe (CPU) and RTMPose (GPU) backends
 
 Usage:
-    # Use RTMPose (default, recommended)
+    # Use RTMPose (default, recommended, fastest)
     python collect_data.py
 
-    # Use MediaPipe
+    # Use MediaPipe (slower but more stable)
     python collect_data.py --backend mediapipe
+
+    # Lower detection confidence if people aren't being detected
+    python collect_data.py --detection-confidence 0.3
 
     # Custom countdown and duration
     python collect_data.py --countdown 5 --min-duration 120
@@ -20,6 +23,11 @@ Key Controls:
     'l' - Start recording Lying
     'q' - Stop current recording
     'ESC' - Exit program
+
+Performance Tips:
+    - RTMPose with TensorRT engine: ~12ms per frame (best performance)
+    - If bones aren't detected: Lower --detection-confidence (try 0.3-0.4)
+    - If processing is slow: Make sure MJPEG encoding is enabled on camera
 """
 
 import cv2
@@ -29,6 +37,8 @@ import time
 import os
 import json
 import yaml
+import threading
+from queue import Queue
 from datetime import datetime
 from typing import Optional, List, Tuple
 from pathlib import Path
@@ -40,17 +50,20 @@ class DataCollector:
     def __init__(self, backend: str = 'rtmpose',
                  config_path: str = 'config/config_gpu.yaml',
                  countdown: int = 3,
-                 min_duration: int = 120):
+                 min_duration: int = 120,
+                 detection_confidence: float = None):
         """
         Args:
             backend: 'mediapipe' or 'rtmpose'
             config_path: Path to config file (for RTMPose)
             countdown: Countdown seconds after key press
             min_duration: Recommended minimum recording duration (seconds)
+            detection_confidence: Override detection confidence (default: use config value)
         """
         self.backend = backend
         self.countdown = countdown
         self.min_duration = min_duration
+        self.detection_confidence = detection_confidence
 
         # Recording state
         self.is_recording = False
@@ -65,6 +78,16 @@ class DataCollector:
         # Data storage
         self.output_dir = "training_data"
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Async save queue
+        self.save_queue = Queue(maxsize=100)
+        self.save_thread = None
+        self.stop_save_thread = False
+
+        # Multi-threading queues for camera/processing/display
+        self.camera_queue = Queue(maxsize=2)  # Keep only latest 2 frames
+        self.processed_queue = Queue(maxsize=2)  # Keep only latest 2 processed frames
+        self.running = False
 
         # Initialize pose estimator based on backend
         if backend == 'mediapipe':
@@ -115,8 +138,23 @@ class DataCollector:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
+        # For data collection, always process every frame (ignore inference intervals)
+        # The config's detection_interval and pose_interval are for continuous monitoring
+        # They would make collection slow (e.g., 30 FPS -> 10 FPS with interval=3)
+        if 'inference' in self.config:
+            print("[INFO] Overriding inference intervals for maximum collection speed...")
+            self.config['inference']['skip_frames'] = 0
+            self.config['inference']['detection_interval'] = 1
+            self.config['inference']['pose_interval'] = 1
+
+        # Override detection confidence if specified
+        if self.detection_confidence is not None:
+            self.config['models']['person']['confidence'] = self.detection_confidence
+            print(f"[INFO] Overriding detection confidence: {self.detection_confidence}")
+
         print("[INFO] Initializing YOLOv8 person detector...")
-        self.person_detector = PersonDetector(self.config)
+        print(f"[INFO] Detection confidence: {self.config['models']['person'].get('confidence', 0.5)}")
+        self.person_detector = PersonDetector(self.config['models']['person'])
 
         print("[INFO] Initializing RTMPose pose estimator...")
         self.pose_estimator = PoseEstimatorFactory.create(self.config['models']['pose'])
@@ -160,43 +198,57 @@ class DataCollector:
 
     def _process_rtmpose(self, frame):
         """Process frame with RTMPose"""
-        detections = self.person_detector.detect(frame)
+        bbox = self.person_detector.detect(frame)
 
-        if len(detections) == 0:
+        if bbox is None:
             return None, frame
 
-        # Get first person
-        bbox = detections[0]
+        # bbox format: [x1, y1, x2, y2, confidence] in pixel coordinates
         keypoints = self.pose_estimator.estimate(frame, bbox)
 
         if keypoints is None or len(keypoints) == 0:
             return None, frame
 
-        # Draw bbox
+        # Draw bbox (keypoints[0] contains [x, y, confidence] in pixel coordinates)
         x1, y1, x2, y2, conf = bbox
         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
 
         # Draw keypoints
+        # RTMPose returns (17, 3) where each row is [x, y, confidence] in pixel coordinates
         for i, kpt in enumerate(keypoints):
-            x, y, z, confidence = kpt
+            x, y, confidence = kpt
             if confidence > 0.3:
-                px = int(x * frame.shape[1])
-                py = int(y * frame.shape[0])
-                cv2.circle(frame, (px, py), 3, (0, 255, 255), -1)
+                # Coordinates are already in pixel space
+                cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
 
         return keypoints, frame
 
     def run(self):
         """Run data collection"""
         cap = cv2.VideoCapture(0)
-        # Force MJPEG encoding for better bandwidth efficiency
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        cap.set(cv2.CAP_PROP_FPS, 30)
 
-        print("\n[INFO] Data collection tool started")
+        # Try to set optimal camera parameters (but don't fail if unsupported)
+        print("[INFO] Configuring camera...")
+        try:
+            # Try MJPEG encoding for bandwidth efficiency
+            desired_fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            cap.set(cv2.CAP_PROP_FOURCC, desired_fourcc)
+
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+
+            actual_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            actual_fps = cap.get(cv2.CAP_PROP_FPS)
+
+            print(f"[INFO] Camera resolution: {int(actual_width)}x{int(actual_height)} @ {int(actual_fps)} FPS")
+        except Exception as e:
+            print(f"[WARN] Camera configuration error (continuing anyway): {e}")
+
+        print("\n[INFO] Data collection tool started (multi-threaded)")
         print(f"[INFO] Backend: {self.backend}")
+        print(f"[INFO] Resolution: 1920x1080 @ 30fps")
         print("[INFO] Key controls:")
         print("  's' - Start recording Sitting")
         print("  't' - Start recording Standing")
@@ -205,12 +257,39 @@ class DataCollector:
         print("  'ESC' - Exit program\n")
 
         countdown_start_time = None
+        frame_times = []  # For FPS calculation
+        last_frame = None
+        last_keypoints = None
 
+        # Start all threads
+        self.running = True
+        self._start_save_thread()
+
+        camera_thread = threading.Thread(target=self._camera_thread, args=(cap,), daemon=True)
+        process_thread = threading.Thread(target=self._process_thread, daemon=True)
+
+        camera_thread.start()
+        process_thread.start()
+
+        print("[INFO] Waiting for first frame...")
+
+        # Main display thread (in main thread for OpenCV)
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+            frame_start = time.time()
 
+            # Get latest processed frame
+            try:
+                last_frame, last_keypoints, frame_vis = self.processed_queue.get(timeout=0.5)
+            except:
+                # No frame available yet
+                if last_frame is None:
+                    continue
+                # Use last known frame
+
+            if last_frame is None:
+                continue
+
+            frame = last_frame.copy()
             current_time = time.time()
 
             # Countdown phase
@@ -228,10 +307,20 @@ class DataCollector:
 
             # Recording phase
             elif self.is_recording:
-                keypoints, frame = self.process_frame(frame)
+                if last_keypoints is not None:
+                    keypoints = last_keypoints
 
-                if keypoints is not None:
-                    # Save as 68-dim flattened features (17 x 4 = 68)
+                    # Normalize keypoints to consistent format for both MediaPipe and RTMPose
+                    if keypoints.shape[1] == 3:
+                        h, w = frame.shape[:2]
+                        normalized_keypoints = np.zeros((17, 4), dtype=np.float32)
+                        normalized_keypoints[:, 0] = keypoints[:, 0] / w
+                        normalized_keypoints[:, 1] = keypoints[:, 1] / h
+                        normalized_keypoints[:, 2] = 0.0
+                        normalized_keypoints[:, 3] = keypoints[:, 2]
+                        keypoints = normalized_keypoints
+
+                    # Save as 68-dim flattened features
                     features = keypoints.flatten()
 
                     # Update sequence buffer
@@ -241,7 +330,7 @@ class DataCollector:
 
                     # Save sample
                     sample = {
-                        'features': features.tolist(),  # 68-dim
+                        'features': features.tolist(),
                         'label': self.current_pose_label,
                         'timestamp': current_time
                     }
@@ -263,10 +352,17 @@ class DataCollector:
             # Display
             cv2.imshow(f'Data Collection Tool ({self.backend})', frame)
 
-            # Key handling
+            # Performance tracking
+            frame_time = time.time() - frame_start
+            frame_times.append(frame_time)
+            if len(frame_times) > 30:
+                frame_times.pop(0)
+
+            # Key handling (1ms timeout to remain responsive)
             key = cv2.waitKey(1) & 0xFF
 
             if key == 27:  # ESC
+                self.running = False
                 if self.is_recording:
                     self.stop_recording()
                 break
@@ -291,11 +387,28 @@ class DataCollector:
                 elif self.is_recording:
                     self.stop_recording()
 
+        # Stop all threads
+        self.running = False
+        camera_thread.join(timeout=2.0)
+        process_thread.join(timeout=2.0)
+
         cap.release()
         cv2.destroyAllWindows()
 
         if self.backend == 'mediapipe':
             self.pose.close()
+
+        # Stop save thread and wait for pending saves
+        print("\n[INFO] Closing and flushing save queue...")
+        self._stop_save_thread()
+
+        # Print performance statistics
+        if frame_times:
+            avg_frame_time = np.mean(frame_times)
+            fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
+            print("\n[INFO] Performance Statistics:")
+            print(f"  Avg frame time: {avg_frame_time*1000:.1f}ms")
+            print(f"  Achieved FPS: {fps:.1f}")
 
         print("\n[INFO] Data collection completed")
         print(f"[INFO] Data saved to: {self.output_dir}/")
@@ -307,6 +420,90 @@ class DataCollector:
         self.collected_samples = []
         self.sequence_buffer = []
         print(f"\n[INFO] Preparing to record {pose_label}, countdown {self.countdown} seconds...")
+
+    def _camera_thread(self, cap):
+        """Background thread: continuously read camera frames"""
+        while self.running:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Keep only latest frame (drop old ones if buffer full)
+            try:
+                self.camera_queue.put_nowait(frame)
+            except:
+                # Queue full, drop oldest frame
+                try:
+                    self.camera_queue.get_nowait()
+                    self.camera_queue.put_nowait(frame)
+                except:
+                    pass
+
+    def _process_thread(self):
+        """Background thread: process frames (detect + pose estimation)"""
+        while self.running:
+            try:
+                frame = self.camera_queue.get(timeout=0.1)
+
+                # Process frame
+                keypoints, frame_with_vis = self.process_frame(frame)
+
+                # Put result in processed queue
+                try:
+                    self.processed_queue.put_nowait((frame, keypoints, frame_with_vis))
+                except:
+                    # Queue full, drop oldest
+                    try:
+                        self.processed_queue.get_nowait()
+                        self.processed_queue.put_nowait((frame, keypoints, frame_with_vis))
+                    except:
+                        pass
+            except:
+                # Timeout waiting for frame
+                pass
+
+    def _start_save_thread(self):
+        """Start background thread for async data saving"""
+        if self.save_thread is None or not self.save_thread.is_alive():
+            self.stop_save_thread = False
+            self.save_thread = threading.Thread(target=self._save_worker, daemon=True)
+            self.save_thread.start()
+
+    def _save_worker(self):
+        """Background worker for async saving (doesn't block video processing)"""
+        while not self.stop_save_thread:
+            try:
+                # Wait for data with timeout
+                data = self.save_queue.get(timeout=0.1)
+                if data is None:
+                    break
+
+                pose_label, samples = data
+                filepath = os.path.join(self.output_dir, f"{pose_label}_samples.json")
+
+                # Load existing data
+                existing_data = []
+                if os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'r') as f:
+                            existing_data = json.load(f)
+                    except:
+                        existing_data = []
+
+                # Merge and save
+                existing_data.extend(samples)
+                with open(filepath, 'w') as f:
+                    json.dump(existing_data, f)
+
+            except:
+                # Timeout or queue empty
+                pass
+
+    def _stop_save_thread(self):
+        """Stop background save thread and flush remaining data"""
+        self.stop_save_thread = True
+        if self.save_thread:
+            self.save_thread.join(timeout=2.0)
 
     def stop_recording(self):
         """Stop recording and save"""
@@ -320,27 +517,15 @@ class DataCollector:
             print("[WARN] No valid samples collected")
             return
 
-        # Save to file
-        filepath = os.path.join(self.output_dir, f"{self.current_pose_label}_samples.json")
+        # Queue data for async saving (doesn't block video processing)
+        num_samples = len(self.collected_samples)
+        self.save_queue.put((self.current_pose_label, self.collected_samples.copy()))
 
-        # Load existing data
-        existing_data = []
-        if os.path.exists(filepath):
-            try:
-                with open(filepath, 'r') as f:
-                    existing_data = json.load(f)
-            except:
-                existing_data = []
+        print(f"[INFO] Queued {num_samples} samples for saving (async)")
+        print(f"[INFO] Continuing to process video...")
 
-        # Merge data
-        existing_data.extend(self.collected_samples)
-
-        # Save
-        with open(filepath, 'w') as f:
-            json.dump(existing_data, f)
-
-        print(f"[INFO] Saved {len(self.collected_samples)} samples to {filepath}")
-        print(f"[INFO] Total {self.current_pose_label} samples: {len(existing_data)}")
+        # Reset for next recording
+        self.collected_samples = []
 
     def draw_countdown(self, frame, remaining):
         """Draw countdown overlay"""
@@ -424,6 +609,8 @@ def main():
                        help='Countdown seconds before recording')
     parser.add_argument('--min-duration', type=int, default=120,
                        help='Recommended minimum recording duration (seconds)')
+    parser.add_argument('--detection-confidence', type=float, default=None,
+                       help='Override YOLO detection confidence (default: use config value)')
 
     args = parser.parse_args()
 
@@ -431,7 +618,8 @@ def main():
         backend=args.backend,
         config_path=args.config,
         countdown=args.countdown,
-        min_duration=args.min_duration
+        min_duration=args.min_duration,
+        detection_confidence=args.detection_confidence
     )
 
     collector.run()

@@ -4,8 +4,7 @@
 
 姿态估计后端：
 - MediaPipe: CPU友好，开发测试推荐
-- RTMPose: GPU加速，生产部署推荐
-- ViTPose: 高精度，特殊场景使用
+- RTMPose: GPU加速，生产部署推荐（支持 PyTorch 和 TensorRT）
 """
 
 from .base import DetectorInterface, PoseEstimatorInterface
@@ -23,11 +22,6 @@ try:
 except ImportError:
     RTMPoseEstimator = None
 
-try:
-    from .pose_estimator_vitpose import ViTPoseEstimator
-except ImportError:
-    ViTPoseEstimator = None
-
 __all__ = [
     'DetectorInterface',
     'PoseEstimatorInterface',
@@ -37,5 +31,4 @@ __all__ = [
     'PoseUtils',
     'MediaPipePoseEstimator',
     'RTMPoseEstimator',
-    'ViTPoseEstimator',
 ]

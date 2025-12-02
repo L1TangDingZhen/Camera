@@ -41,20 +41,28 @@ models:
     config_file: models/rtmpose/configs/rtmpose-s_8xb256-420e_coco-256x192.py
 
     # ===== Model Checkpoint Options =====
-    # Pure FP32 TensorRT (trtexec from mmdeploy_work_v2/end2end.onnx)
-    # checkpoint: models/rtmpose/mmdeploy_output_fp32/end2end.engine
-    # Stage 1: PyTorch FP32 (推荐：稳定性优先，全场景可靠，需要激活mmdeploy_env环境)
-    checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
-    # Stage 2: TensorRT engine (预处理bug - 需要MMDeploy正确导出)
-    # checkpoint: models/rtmpose/rtmpose-s.engine
+    # Model 0: legacy version (unsure, 56ms)
+    # checkpoint: models/rtmpose/old_rtmpose_pytorch.pth
 
+    # Model 1: PyTorch FP32 Official (stable baseline, 57ms)
+    # checkpoint: models/rtmpose/rtmpose-s_simcc-aic-coco_pt-aic-coco_420e-256x192-fcb2599b_20230126.pth
 
+    # Model 2: TensorRT FP32 Standalone (opset 17) - No MMDeploy needed
+    checkpoint: models/rtmpose/rtmpose-s-fp32.engine
+    # deploy_cfg:  # Leave empty for Standalone mode
+
+    # Model 2.5: TensorRT FP32 Standalone (opset 11)
+    # checkpoint: models/rtmpose/rtmpose-s-fp32-opset11.engine
+
+    # Model 3: TensorRT FP32 MMDeploy (official deployment method)
+    # checkpoint: models/rtmpose/mmdeploy_fp32/end2end_static.engine
+    # deploy_cfg: models/rtmpose/mmdeploy_fp32/deploy.json
 
 
     device: cuda:0    # RTMPose requires GPU
     confidence: 0.3
     keypoint_min_conf: 0.3          # Lower threshold to avoid dropping points
-    keypoint_smooth_alpha: 0.0      # 0=off, disable keypoint smoothing
+    keypoint_smooth_alpha: 0.5      # 0=off; 0.4-0.6 recommended to smooth keypoints
 
     # PyTorch AMP (Automatic Mixed Precision) - Default optimization
     use_amp: false  # Disabled: Baseline FP32 performs 7.6% better than AMP on RTMPose-s
@@ -264,6 +272,72 @@ tensorrt:
   enabled: true  # false for PC development, change to true on Jetson
   fp16_mode: true
   workspace_size: 4096  # MB
+
+
+# ==============================================================================
+# OPTIMIZATION HISTORY
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# [2024-11-30] TensorRT Wrapper Precision Fix
+# ------------------------------------------------------------------------------
+#
+# Problem:
+#   - TensorRT engine inference produced inaccurate keypoint predictions
+#   - debug_rtmpose_alignment.py: 0.56px error (direct PyTorch vs TensorRT)
+#   - tensorrt_wrapper.py path: 10-30px error (unusable)
+#   - Same engine file, vastly different results - why?
+#
+# Root Cause:
+#   The TensorRT engine was CORRECT. The problem was in tensorrt_wrapper.py's
+#   preprocessing and postprocessing code - the "translation layer" between
+#   raw images and the neural network.
+#
+# Issues Found & Fixed:
+#
+#   1. Missing BGR→RGB Conversion
+#      - OpenCV reads BGR, but model trained on RGB
+#      - Fix: Added cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
+#
+#   2. Missing Aspect Ratio Adjustment
+#      - Original: scale = [w, h] directly
+#      - MMPose: Adjusts scale to maintain 192:256 aspect ratio
+#      - Fix: if w > h*0.75: scale=[w, w/0.75] else: scale=[h*0.75, h]
+#
+#   3. Incorrect Warp Matrix Calculation
+#      - Original: Simplified 3-point transform
+#      - MMPose: Uses specific get_warp_matrix() with scale[0] for direction
+#      - Fix: Reimplemented exact MMPose get_warp_matrix() logic
+#
+#   4. Incorrect Inverse Transform
+#      - Original: cv2.invertAffineTransform(trans) - accumulates numerical error
+#      - MMPose: get_warp_matrix(..., inv=True) - direct computation
+#      - Fix: Use inv=True parameter instead of matrix inversion
+#
+# Validation Results:
+#   ┌────────────────────┬────────────┬────────────┬────────────┐
+#   │      Comparison    │  Avg Error │ Max Error  │   Status   │
+#   ├────────────────────┼────────────┼────────────┼────────────┤
+#   │ PyTorch vs opset17 │  0.0147 px │  0.50 px   │  ✅ PASS   │
+#   │ PyTorch vs opset11 │  0.0294 px │  0.50 px   │  ✅ PASS   │
+#   │ opset17 vs opset11 │  0.0147 px │  0.50 px   │  ✅ PASS   │
+#   └────────────────────┴────────────┴────────────┴────────────┘
+#
+# Conclusion:
+#   - Both FP32 engines (opset11 and opset17) are mathematically equivalent
+#   - Sub-pixel accuracy achieved (0.015px average error)
+#   - tensorrt_wrapper.py now correctly matches MMPose preprocessing/postprocessing
+#
+# Files Modified:
+#   - src/detectors/tensorrt_wrapper.py (major rewrite)
+#
+# Documentation:
+#   - docs/TENSORRT_PRECISION_DEBUG.md (full debugging journey)
+#
+# Key Lesson:
+#   Deep learning model accuracy depends not just on the network, but critically
+#   on preprocessing and postprocessing matching the training pipeline EXACTLY.
+# ------------------------------------------------------------------------------
 
 
 # == Performance Notes ==
@@ -847,3 +921,38 @@ tensorrt:
   # | Single person, single camera + face recognition | 35+ FPS        | + Lightweight face model |
   # | 2 people, single camera + face recognition      | 25+ FPS        | + Batch inference        |
   # | 2 people, dual cameras + face recognition       | 15+ FPS/stream | + Multi-process          |
+
+
+
+
+
+
+
+
+# 要解决的问题:
+# 1. 运行python collect_data.py会下载yolov8s的模型，但是在config_gpu.yaml中配置的是yolov8n.engine，整个项目用不同的yolo，会不会有问题？是统一用一个还是分别用不同的？
+# 2. 当前tensor rt模型只有FP32的精度，下一步尝试FP16精度的模型
+# 3. 使用mmdeploy_runtime进行官方模组的部署，尝试官方套件的精度， 
+#   MMDeploy Python SDK (轻量)                                   │
+#   │  ─────────────────────────────────────                    │
+#   │  mmdeploy-runtime (推理库)                                      │
+#   │    ↓                                                             │
+#   │  from mmdeploy_runtime import PoseDetector                      │
+#   │    ↓                                                             │
+#   │  detector = PoseDetector(model, deploy_cfg, backend_files)      │
+#   │    ↓                                                             │
+#   │  results = detector(img, bboxes)  # 直接推理                    │
+#   │                                                                 │
+#   │  依赖: mmdeploy-runtime (仅此)                                  │
+#   │  配置: 简单 (deploy.json 就够了)                                │
+#   │  问题: ✅ 内置预处理/后处理，无需手动配置 
+# 4. 当前config里面太多yaml的配置文件，不清楚每个文件的作用和区别，删除不必要的，只留PC的CPU和GPU，JETSON的配置文件
+# 5. src/detectors里面太多文件，不清楚每个文件的作用和区别，删除不必要的，只留PC的CPU和GPU，JETSON的配置文件
+# 6. 在.gitignore里面添加一些测试文件，日志文件等不必要提交的文件，删除不必要的文件，模型讨论去留
+# 7. yolov8 engine 和 pth性能差不多？检查tensor rt支持情况
+
+
+# 开发方向:
+# 多摄像头功能支持
+# 面部识别功能加入
+# web datashboard主题修改成claude页面主题，增加多摄像头预览功能，主页有bug，尤其是当前状态那一栏

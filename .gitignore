@@ -176,6 +176,8 @@ compare_*.py
 benchmark_*.py
 record_*.py
 validate_*.py
+capture_*.py
+deploy_config_*.py
 
 # Experimental/unused wrappers
 *_wrapper_hybrid.py
@@ -207,9 +209,19 @@ TROUBLESHOOTING.md
 rtmpose-*.py
 
 # ===================================
-# Video/Image test files
+# Video/Image test files & Alignment
 # ===================================
 test_video.mp4
 test_comparison.jpg
 comparison_*.jpg
 data/*.mp4
+debug_alignment/
+debug_*/
+
+# ===================================
+# Deployment Build Artifacts
+# ===================================
+mmdeploy_*/
+mmdeploy_rtmpose_*/
+mmdeploy_output_*/
+mmdeploy_work_*/

@@ -10,6 +10,7 @@ import yaml
 import cv2
 import numpy as np
 from pathlib import Path
+from typing import Optional
 
 from src.detectors import PersonDetector, PoseEstimatorFactory
 from src.state import BehaviorStateMachine, ROIManager
@@ -278,29 +279,82 @@ class LifeTracker:
 
         # Draw keypoints
         if keypoints is not None:
-            self._draw_keypoints(vis_frame, keypoints)
+            self._draw_keypoints(vis_frame, keypoints, bbox)
 
         # Draw state info
         self._draw_status(vis_frame, fps)
 
         return vis_frame
 
-    def _draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray):
+    def _draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray, bbox: Optional[np.ndarray] = None):
         """Draw keypointsand skeleton"""
         from src.detectors.base import Keypoint
 
+        # init cache to hold recent reliable joints for brief occlusion
+        if not hasattr(self, '_last_draw_keypoints'):
+            self._last_draw_keypoints = None
+
+        # 定义阈值（保持上半身原阈值，对下半身增加高/低双阈值，配合长度过滤防乱连、兼顾遮挡兜底）
+        lower_body_indices = {11, 12, 13, 14, 15, 16}
+        upper_body_high = 0.3
+        upper_body_low = 0.25  # 稍宽松，用于轻微遮挡
+        lower_body_high = 0.55
+        lower_body_low = 0.4   # 稍宽松，用于半遮挡腿部
+
+        # 基于bbox高度估算最大允许线段长度，过滤缺点导致的超长连线
+        max_seg_len = None
+        if bbox is not None:
+            _, y1, _, y2, _ = bbox.astype(float)
+            max_seg_len = (y2 - y1) * 1.2  # 留一定余量
+        else:
+            max_seg_len = frame.shape[0] * 0.6  # 无bbox时按画面高度约束
+
+        # 构造可视化用的关键点，短暂持有上帧的高置信度位置，避免轻微遮挡时直接断线
+        vis_keypoints = keypoints.copy()
+        if self._last_draw_keypoints is not None and self._last_draw_keypoints.shape == keypoints.shape:
+            for i in range(keypoints.shape[0]):
+                high = lower_body_high if i in lower_body_indices else upper_body_high
+                low = lower_body_low if i in lower_body_indices else upper_body_low
+                if vis_keypoints[i, 2] < high:
+                    prev_conf = self._last_draw_keypoints[i, 2]
+                    if prev_conf > high or (vis_keypoints[i, 2] > low and prev_conf > low):
+                        vis_keypoints[i, :2] = self._last_draw_keypoints[i, :2]
+                        vis_keypoints[i, 2] = max(vis_keypoints[i, 2], prev_conf) * 0.9  # 轻微衰减，避免长期保留
+
         # Draw keypoints
-        for i, (x, y, conf) in enumerate(keypoints):
-            if conf > 0.3:
+        for i, (x, y, conf) in enumerate(vis_keypoints):
+            high = lower_body_high if i in lower_body_indices else upper_body_high
+            low = lower_body_low if i in lower_body_indices else upper_body_low
+            # 点的绘制：高置信或（当前中等+上一帧高）时也画，缓和遮挡
+            if conf > high or (conf > low and self._last_draw_keypoints is not None and self._last_draw_keypoints.shape == vis_keypoints.shape and self._last_draw_keypoints[i, 2] > high):
                 cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
 
         # Draw skeleton
         connections = Keypoint.get_connections()
         for idx1, idx2 in connections:
-            if keypoints[idx1, 2] > 0.3 and keypoints[idx2, 2] > 0.3:
-                x1, y1 = keypoints[idx1, :2].astype(int)
-                x2, y2 = keypoints[idx2, :2].astype(int)
+            high1 = lower_body_high if idx1 in lower_body_indices else upper_body_high
+            high2 = lower_body_high if idx2 in lower_body_indices else upper_body_high
+            low1 = lower_body_low if idx1 in lower_body_indices else upper_body_low
+            low2 = lower_body_low if idx2 in lower_body_indices else upper_body_low
+
+            # 线段绘制采用“至少一端高置信 + 双端不低于宽松阈值”的策略，兼顾稳定和遮挡兜底
+            c1 = vis_keypoints[idx1, 2]
+            c2 = vis_keypoints[idx2, 2]
+            allow_line = ((c1 > high1 and c2 > low2) or (c2 > high2 and c1 > low1)) and (c1 > low1 and c2 > low2)
+
+            if allow_line:
+                x1, y1 = vis_keypoints[idx1, :2].astype(int)
+                x2, y2 = vis_keypoints[idx2, :2].astype(int)
+
+                # 跳过明显超长的线段以避免乱连
+                seg_len = np.hypot(x1 - x2, y1 - y2)
+                if max_seg_len is not None and seg_len > max_seg_len:
+                    continue
+
                 cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+        # 保存本帧可视化关键点，用于下一帧短暂补偿
+        self._last_draw_keypoints = vis_keypoints
 
     def _draw_status(self, frame: np.ndarray, fps: float):
         """Draw state info"""
