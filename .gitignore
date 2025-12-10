@@ -125,6 +125,11 @@ debug*.docx
 # ===================================
 benchmark_results.txt
 benchmark_*.txt
+yolo_test/
+rtmpose_test/
+fp16_vs_fp32_test_results.log
+rtmpose_fp16_benchmark_results.txt
+rtmpose_fp16_accuracy_test.log
 
 # ===================================
 # Videos, Images, Screenshots (except docs)
@@ -152,6 +157,8 @@ htmlcov/
 # Documentation Build
 # ===================================
 docs/_build/
+docs/INFERENCE_INTERVAL_OPTIMIZATION.md
+docs/INTERVAL_QUICK_REFERENCE.md
 
 # ===================================
 # Git Artifacts
@@ -178,6 +185,10 @@ record_*.py
 validate_*.py
 capture_*.py
 deploy_config_*.py
+optimize_*.py
+
+# Rebuild scripts and logs
+rebuild_*
 
 # Experimental/unused wrappers
 *_wrapper_hybrid.py
@@ -187,6 +198,8 @@ tensorrt_wrapper_hybrid.py
 !test_quick.py
 !test_robustness.py
 !test_session_tracker.py
+!test_yolo_models.py
+!test_rtmpose_models.py
 
 # ===================================
 # Internal Documentation (not for public)
@@ -209,6 +222,14 @@ TROUBLESHOOTING.md
 rtmpose-*.py
 
 # ===================================
+# Experimental/Backup Pose Estimator Implementations
+# ===================================
+# Alternative RTMPose backends (not currently used)
+src/detectors/pose_estimator_rtmpose_mmdeploy.py
+src/detectors/pose_estimator_rtmpose_tensorrt.py
+src/detectors/pose_estimator_rtmpose_trt.py
+
+# ===================================
 # Video/Image test files & Alignment
 # ===================================
 test_video.mp4
@@ -225,3 +246,4 @@ mmdeploy_*/
 mmdeploy_rtmpose_*/
 mmdeploy_output_*/
 mmdeploy_work_*/
+docs/INTERVAL_QUICK_REFERENCE.md

@@ -12,10 +12,10 @@ models:
   person:
     model: models/yolov8n.engine  # TensorRT FP16 engine - 10x faster than .pt
     device: cuda:0
-    confidence: 0.5
+    confidence: 0.35  # Lower confidence for low-contrast scenarios (dark clothes)
     iou: 0.45
     smooth_alpha: 0.0   # 0=off; >0 enables EMA smoothing of bbox (higher=more smooth)
-    expand_ratio: 1.0   # 1=no expansion
+    expand_ratio: 1.15  # 1.15 = expand bbox by 15% (helps with low contrast scenarios)
 
   # ========================================================================
   # Pose Estimation Model Configuration - Model Switching Location
@@ -956,3 +956,49 @@ tensorrt:
 # 多摄像头功能支持
 # 面部识别功能加入
 # web datashboard主题修改成claude页面主题，增加多摄像头预览功能，主页有bug，尤其是当前状态那一栏
+
+
+
+# 要解决的问题:
+# 完成 ！1. 运行python collect_data.py会下载yolov8s的模型，但是在config_gpu.yaml中配置的是yolov8n.engine，整个项目用不同的yolo，会不会有问题？是统一用一个还是分别用不同的？
+# ？精度有问题，有漂移 2. 当前tensor rt模型只有FP32的精度，下一步尝试FP16精度的模型
+# 完成 ！3. 使用mmdeploy_runtime进行官方模组的部署，尝试官方套件的精度， 
+#   MMDeploy Python SDK (轻量)                                   │
+#   │  ─────────────────────────────────────                    │
+#   │  mmdeploy-runtime (推理库)                                      │
+#   │    ↓                                                             │
+#   │  from mmdeploy_runtime import PoseDetector                      │
+#   │    ↓                                                             │
+#   │  detector = PoseDetector(model, deploy_cfg, backend_files)      │
+#   │    ↓                                                             │
+#   │  results = detector(img, bboxes)  # 直接推理                    │
+#   │                                                                 │
+#   │  依赖: mmdeploy-runtime (仅此)                                  │
+#   │  配置: 简单 (deploy.json 就够了)                                │
+#   │  问题: ✅ 内置预处理/后处理，无需手动配置 
+# 完成 ！4. 当前config里面太多yaml的配置文件，不清楚每个文件的作用和区别，删除不必要的，只留PC的CPU和GPU，JETSON的配置文件
+# 完成 ！ 5. src/detectors里面太多文件，不清楚每个文件的作用和区别，删除不必要的，只留PC的CPU和GPU，JETSON的配置文件
+# 完成 ！6. 在.gitignore里面添加一些测试文件，日志文件等不必要提交的文件，删除不必要的文件，模型讨论去留
+# 完成 ！7. yolov8 engine 和 pth性能差不多？检查tensor rt支持情况
+
+
+# 开发方向:
+# 多摄像头功能支持
+# 面部识别功能加入
+# 多人检测功能支持
+
+# 完成 ！web datashboard主题修改成claude页面主题，增加多摄像头预览功能，主页有bug，尤其是当前状态那一栏
+# YOLOV8 INT8
+# MMDeploy Python SDK
+# 修复 RTMPOSE FP16精度的问题
+
+
+
+
+
+  # - 增强行为检测：尝试轻量级动作序列模型（TCN/Transformer）融合现有姿态结果，提高连续事件识别精度。
+  # - 实时提示与告警：在 web_dashboard.py 中加入阈值配置+通知渠道（如本地邮件/推送接口），并记录告警到 storage/ 的事件日志。
+  # - ROI/设备管理：提供基于 scripts/calibrate_roi.py 的前端向导，支持多摄像头配置和 ROI 版本管理，写入 config/config_<target>.yaml。
+  # - 预测与分析：在 analytics/ 增加会话级趋势预测（简单回归或 Prophet 替代）和每日摘要报表，输出到 data/ 或仪表盘。
+  # - 运行性能优化：为 GPU/Jetson 提供分离的 YAML 配置预设，支持批量推理、帧率自适应降采样，并将模型路径/阈值完全配置化。
+  # - 数据闭环：增加训练数据采集与标注入口（基于 scripts/collect_training_data.py），加上质量过滤与自动 SVM/轻量分类器重训脚本。

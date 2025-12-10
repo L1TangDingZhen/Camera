@@ -184,11 +184,17 @@ class PoseEstimatorFactory:
                    优点: 无需GPU，安装简单，稳定
                    适用: 开发测试、CPU环境
 
-    - 'rtmpose':   RTMPose (GPU高性能，推荐用于生产)
+    - 'rtmpose':   RTMPose (GPU高性能，手动实现)
                    速度: ~12ms (GPU + TensorRT FP16)
                    精度: AP ~68.5%
                    优点: GPU加速，精度更高，支持TensorRT
                    适用: Jetson部署、GPU生产环境
+
+    - 'rtmpose_mmdeploy': RTMPose (官方MMDeploy SDK，最高精度)
+                   速度: ~12-15ms (GPU + TensorRT)
+                   精度: AP ~68.5% (官方保证)
+                   优点: 官方SDK，精度100%保证，支持batch推理
+                   适用: 精度要求高的场景，多人检测
 
     如何切换：
     在配置文件 (config/config_gpu.yaml) 中修改：
@@ -226,9 +232,17 @@ class PoseEstimatorFactory:
             from .pose_estimator_rtmpose import RTMPoseEstimator
             return RTMPoseEstimator(config)
 
+        elif backend == 'rtmpose_mmdeploy':
+            from .pose_estimator_rtmpose_mmdeploy import RTMPoseEstimatorMMDeploy
+            return RTMPoseEstimatorMMDeploy(config)
+
+        elif backend == 'rtmpose_trt' or backend == 'tensorrt':
+            from .pose_estimator_rtmpose_trt import PoseEstimatorRTMPoseTRT
+            return PoseEstimatorRTMPoseTRT(config)
+
         else:
             raise ValueError(
-                f"不支持的姿态估计后端: {backend}\n"
-                f"支持的后端: mediapipe, rtmpose\n"
-                f"请检查配置文件中的 models.pose.backend 字段"
+                f"Unsupported pose estimation backend: {backend}\n"
+                f"Supported backends: mediapipe, rtmpose, rtmpose_mmdeploy, rtmpose_trt (tensorrt)\n"
+                f"Please check models.pose.backend in your config file"
             )

@@ -1,112 +1,158 @@
-// 全局变量
+// Global variables
 let todayPieChart = null;
 let weeklyTrendChart = null;
 let refreshCountdown = 30;
 let refreshInterval = null;
 let countdownInterval = null;
 
-// 工具函数：格式化时长
+// Utility function: Format duration
 function formatDuration(seconds) {
     if (seconds < 60) {
-        return `${Math.floor(seconds)}秒`;
+        return `${Math.floor(seconds)}s`;
     } else if (seconds < 3600) {
         const minutes = Math.floor(seconds / 60);
-        return `${minutes}分钟`;
+        return `${minutes}m`;
     } else {
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         if (minutes > 0) {
-            return `${hours}小时${minutes}分钟`;
+            return `${hours}h ${minutes}m`;
         } else {
-            return `${hours}小时`;
+            return `${hours}h`;
         }
     }
 }
 
-// 工具函数：格式化小时数
+// Utility function: Format hours
 function formatHours(seconds) {
     const hours = seconds / 3600;
-    return `${hours.toFixed(1)}小时`;
+    return `${hours.toFixed(1)}h`;
 }
 
-// 更新当前会话信息
+// Update current session information
 async function updateCurrentSession() {
     try {
         const response = await fetch('/api/stats/current');
-        const result = await response.json();
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
         const content = document.getElementById('currentSessionContent');
 
-        if (result.success && result.has_session) {
+        if (!content) {
+            console.error('Element currentSessionContent not found');
+            return;
+        }
+
+        if (result.success && result.has_session && result.data) {
             const session = result.data;
-            content.innerHTML = `
+
+            // Validate required fields
+            const state = session.state || 'unknown';
+            const duration = session.duration || 0;
+            const zone = session.zone || null;
+
+            let sessionHTML = `
                 <div class="session-info">
                     <div class="session-item">
-                        <h4>当前状态</h4>
-                        <p>${translateState(session.state)}</p>
+                        <h4>Current State</h4>
+                        <p>${translateState(state)}</p>
                     </div>
                     <div class="session-item">
-                        <h4>持续时长</h4>
-                        <p>${formatDuration(session.duration)}</p>
-                    </div>
-                    ${session.zone ? `
+                        <h4>Duration</h4>
+                        <p>${formatDuration(duration)}</p>
+                    </div>`;
+
+            if (zone) {
+                sessionHTML += `
                     <div class="session-item">
-                        <h4>所在区域</h4>
-                        <p>${session.zone}</p>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
+                        <h4>Zone</h4>
+                        <p>${zone}</p>
+                    </div>`;
+            }
+
+            sessionHTML += `</div>`;
+            content.innerHTML = sessionHTML;
         } else {
             content.innerHTML = `
                 <div class="session-info">
                     <div class="session-item">
-                        <h4>当前状态</h4>
-                        <p>无活动检测</p>
+                        <h4>Current State</h4>
+                        <p>No activity detected</p>
                     </div>
                 </div>
             `;
         }
     } catch (error) {
-        console.error('获取当前会话失败:', error);
+        console.error('Failed to fetch current session:', error);
+        const content = document.getElementById('currentSessionContent');
+        if (content) {
+            content.innerHTML = `
+                <div class="session-info">
+                    <div class="session-item">
+                        <h4>Error</h4>
+                        <p style="color: #B54708;">Unable to load current status</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 }
 
-// 翻译状态
+// Translate state
 function translateState(state) {
     const stateMap = {
-        'sitting': '🪑 坐姿',
-        'standing': '🧍 站立',
-        'lying': '🛏️ 躺卧',
-        'sleeping': '😴 睡眠',
-        'unknown': '❓ 未知'
+        'sitting': '🪑 Sitting',
+        'standing': '🧍 Standing',
+        'lying': '🛏️ Lying',
+        'sleeping': '😴 Sleeping',
+        'unknown': '❓ Unknown'
     };
     return stateMap[state] || state;
 }
 
-// 更新今日统计
+// Update today's statistics
 async function updateTodayStats() {
     try {
         const response = await fetch('/api/stats/today');
         const result = await response.json();
 
-        if (result.success) {
+        if (result.success && result.data) {
             const stats = result.data;
 
-            document.getElementById('todaySitting').textContent = formatHours(stats.sitting_duration);
-            document.getElementById('todayStanding').textContent = formatHours(stats.standing_duration);
-            document.getElementById('todayLying').textContent = formatHours(stats.lying_duration);
-            document.getElementById('todaySessions').textContent = stats.total_sessions;
+            // Safely get data with defaults
+            const sittingDuration = stats.sitting_duration || 0;
+            const standingDuration = stats.standing_duration || 0;
+            const lyingDuration = stats.lying_duration || 0;
+            const totalSessions = stats.total_sessions || 0;
 
-            // 更新饼图
+            const sittingEl = document.getElementById('todaySitting');
+            const standingEl = document.getElementById('todayStanding');
+            const lyingEl = document.getElementById('todayLying');
+            const sessionsEl = document.getElementById('todaySessions');
+
+            if (sittingEl) sittingEl.textContent = formatHours(sittingDuration);
+            if (standingEl) standingEl.textContent = formatHours(standingDuration);
+            if (lyingEl) lyingEl.textContent = formatHours(lyingDuration);
+            if (sessionsEl) sessionsEl.textContent = totalSessions;
+
+            // Update pie chart
             updateTodayPieChart(stats);
         }
     } catch (error) {
-        console.error('获取今日统计失败:', error);
+        console.error('Failed to fetch today\'s stats:', error);
+        // Display error state
+        const elements = ['todaySitting', 'todayStanding', 'todayLying', 'todaySessions'];
+        elements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '-';
+        });
     }
 }
 
-// 更新坐姿详细统计
+// Update sitting details statistics
 async function updateSittingDetails() {
     try {
         const response = await fetch('/api/stats/sitting');
@@ -114,36 +160,53 @@ async function updateSittingDetails() {
 
         const content = document.getElementById('sittingDetailsContent');
 
-        if (result.success) {
+        if (!content) {
+            console.error('Element sittingDetailsContent not found');
+            return;
+        }
+
+        if (result.success && result.data) {
             const stats = result.data;
+
+            // Safely get data with defaults
+            const totalHours = (stats.total_duration_hours || 0).toFixed(1);
+            const sessionCount = stats.session_count || 0;
+            const avgDuration = stats.average_session_duration || 0;
+            const longestSession = stats.longest_session || 0;
 
             content.innerHTML = `
                 <div class="sitting-details-grid">
                     <div class="detail-item">
-                        <h4>总时长</h4>
-                        <p>${stats.total_duration_hours.toFixed(1)}小时</p>
+                        <h4>Total Duration</h4>
+                        <p>${totalHours}h</p>
                     </div>
                     <div class="detail-item">
-                        <h4>会话次数</h4>
-                        <p>${stats.session_count}次</p>
+                        <h4>Sessions</h4>
+                        <p>${sessionCount}</p>
                     </div>
                     <div class="detail-item">
-                        <h4>平均时长</h4>
-                        <p>${formatDuration(stats.average_session_duration)}</p>
+                        <h4>Average Duration</h4>
+                        <p>${formatDuration(avgDuration)}</p>
                     </div>
                     <div class="detail-item">
-                        <h4>最长一次</h4>
-                        <p>${formatDuration(stats.longest_session)}</p>
+                        <h4>Longest Session</h4>
+                        <p>${formatDuration(longestSession)}</p>
                     </div>
                 </div>
             `;
+        } else {
+            content.innerHTML = `<p style="text-align: center; color: #938872;">No data available</p>`;
         }
     } catch (error) {
-        console.error('获取坐姿统计失败:', error);
+        console.error('Failed to fetch sitting stats:', error);
+        const content = document.getElementById('sittingDetailsContent');
+        if (content) {
+            content.innerHTML = `<p style="text-align: center; color: #B54708;">Loading failed</p>`;
+        }
     }
 }
 
-// 检查久坐警告
+// Check prolonged sitting alert
 async function checkProlongedSitting() {
     try {
         const response = await fetch('/api/alert/prolonged_sitting?threshold=30');
@@ -154,17 +217,17 @@ async function checkProlongedSitting() {
 
         if (result.success && result.data.alert) {
             const duration = Math.floor(result.data.current_duration_minutes);
-            message.textContent = `您已持续坐姿${duration}分钟，建议起身活动！`;
+            message.textContent = `You've been sitting for ${duration} minutes. Time to move!`;
             alert.style.display = 'flex';
         } else {
             alert.style.display = 'none';
         }
     } catch (error) {
-        console.error('检查久坐警告失败:', error);
+        console.error('Failed to check prolonged sitting:', error);
     }
 }
 
-// 创建/更新今日活动饼图
+// Create/update today's activity pie chart
 function updateTodayPieChart(stats) {
     const ctx = document.getElementById('todayPieChart');
 
@@ -175,23 +238,23 @@ function updateTodayPieChart(stats) {
     todayPieChart = new Chart(ctx, {
         type: 'pie',
         data: {
-            labels: ['坐姿', '站立', '躺卧'],
+            labels: ['Sitting', 'Standing', 'Lying'],
             datasets: [{
-                label: '活动时长（小时）',
+                label: 'Activity Duration (hours)',
                 data: [
                     stats.sitting_duration / 3600,
                     stats.standing_duration / 3600,
                     stats.lying_duration / 3600
                 ],
                 backgroundColor: [
-                    'rgba(255, 99, 132, 0.8)',
-                    'rgba(54, 162, 235, 0.8)',
-                    'rgba(255, 206, 86, 0.8)'
+                    'rgba(181, 132, 94, 0.8)',
+                    'rgba(107, 100, 86, 0.8)',
+                    'rgba(147, 136, 114, 0.8)'
                 ],
                 borderColor: [
-                    'rgba(255, 99, 132, 1)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 206, 86, 1)'
+                    'rgba(181, 132, 94, 1)',
+                    'rgba(107, 100, 86, 1)',
+                    'rgba(147, 136, 114, 1)'
                 ],
                 borderWidth: 2
             }]
@@ -210,7 +273,7 @@ function updateTodayPieChart(stats) {
                 },
                 title: {
                     display: true,
-                    text: '今日活动时长分布'
+                    text: 'Today\'s Activity Distribution'
                 },
                 tooltip: {
                     callbacks: {
@@ -219,7 +282,7 @@ function updateTodayPieChart(stats) {
                             if (label) {
                                 label += ': ';
                             }
-                            label += context.parsed.toFixed(1) + '小时';
+                            label += context.parsed.toFixed(1) + 'h';
                             return label;
                         }
                     }
@@ -229,7 +292,7 @@ function updateTodayPieChart(stats) {
     });
 }
 
-// 更新本周趋势图
+// Update weekly trend chart
 async function updateWeeklyTrendChart() {
     try {
         const response = await fetch('/api/stats/weekly');
@@ -246,7 +309,7 @@ async function updateWeeklyTrendChart() {
             weeklyTrendChart.destroy();
         }
 
-        // 准备数据
+        // Prepare data
         const labels = stats.daily_breakdown.map(day => day.date);
         const sittingData = stats.daily_breakdown.map(day => (day.sitting / 3600).toFixed(1));
         const standingData = stats.daily_breakdown.map(day => (day.standing / 3600).toFixed(1));
@@ -258,26 +321,26 @@ async function updateWeeklyTrendChart() {
                 labels: labels,
                 datasets: [
                     {
-                        label: '坐姿',
+                        label: 'Sitting',
                         data: sittingData,
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgb(181, 132, 94)',
+                        backgroundColor: 'rgba(181, 132, 94, 0.2)',
                         tension: 0.3,
                         fill: true
                     },
                     {
-                        label: '站立',
+                        label: 'Standing',
                         data: standingData,
-                        borderColor: 'rgb(54, 162, 235)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgb(107, 100, 86)',
+                        backgroundColor: 'rgba(107, 100, 86, 0.2)',
                         tension: 0.3,
                         fill: true
                     },
                     {
-                        label: '躺卧',
+                        label: 'Lying',
                         data: lyingData,
-                        borderColor: 'rgb(255, 206, 86)',
-                        backgroundColor: 'rgba(255, 206, 86, 0.2)',
+                        borderColor: 'rgb(147, 136, 114)',
+                        backgroundColor: 'rgba(147, 136, 114, 0.2)',
                         tension: 0.3,
                         fill: true
                     }
@@ -297,7 +360,7 @@ async function updateWeeklyTrendChart() {
                     },
                     title: {
                         display: true,
-                        text: '本周活动时长趋势（小时）'
+                        text: 'Weekly Activity Trend (hours)'
                     },
                     tooltip: {
                         callbacks: {
@@ -306,7 +369,7 @@ async function updateWeeklyTrendChart() {
                                 if (label) {
                                     label += ': ';
                                 }
-                                label += context.parsed.y + '小时';
+                                label += context.parsed.y + 'h';
                                 return label;
                             }
                         }
@@ -317,25 +380,25 @@ async function updateWeeklyTrendChart() {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: '小时'
+                            text: 'Hours'
                         }
                     }
                 }
             }
         });
     } catch (error) {
-        console.error('更新本周趋势图失败:', error);
+        console.error('Failed to update weekly trend chart:', error);
     }
 }
 
-// 更新最后更新时间
+// Update last update time
 function updateLastUpdateTime() {
     const now = new Date();
-    const timeString = now.toLocaleTimeString('zh-CN');
+    const timeString = now.toLocaleTimeString('en-US');
     document.getElementById('lastUpdate').textContent = timeString;
 }
 
-// 刷新倒计时
+// Start refresh countdown
 function startRefreshCountdown() {
     if (countdownInterval) {
         clearInterval(countdownInterval);
@@ -354,14 +417,14 @@ function startRefreshCountdown() {
     }, 1000);
 }
 
-// 更新预测信息
+// Update prediction information
 async function updatePredictions() {
     try {
-        // 获取下次坐姿预测
+        // Get next sitting prediction
         const nextSittingResponse = await fetch('/api/prediction/next_sitting');
         const nextSittingResult = await nextSittingResponse.json();
 
-        // 获取最佳提醒时间
+        // Get optimal reminder time
         const reminderResponse = await fetch('/api/prediction/optimal_reminder');
         const reminderResult = await reminderResponse.json();
 
@@ -374,29 +437,29 @@ async function updatePredictions() {
             content.innerHTML = `
                 <div class="prediction-grid">
                     <div class="prediction-item">
-                        <h4>🎯 预测下次坐姿时长</h4>
-                        <p class="prediction-value">${prediction.predicted_duration_minutes || 0}分钟</p>
-                        <p class="prediction-confidence">置信度: ${(prediction.confidence * 100).toFixed(0)}%</p>
+                        <h4>🎯 Next Session Prediction</h4>
+                        <p class="prediction-value">${prediction.predicted_duration_minutes || 0}m</p>
+                        <p class="prediction-confidence">Confidence: ${(prediction.confidence * 100).toFixed(0)}%</p>
                         <p class="prediction-note">${prediction.recommendation}</p>
                     </div>
                     <div class="prediction-item">
-                        <h4>⏰ 建议提醒间隔</h4>
-                        <p class="prediction-value">${reminder.recommended_reminder_interval}分钟</p>
+                        <h4>⏰ Recommended Reminder</h4>
+                        <p class="prediction-value">${reminder.recommended_reminder_interval}m</p>
                         <p class="prediction-note">${reminder.pattern_description}</p>
                     </div>
                 </div>
             `;
         } else {
-            content.innerHTML = `<p>📊 累积更多数据后将提供预测...</p>`;
+            content.innerHTML = `<p>📊 Predictions will be available after collecting more data...</p>`;
         }
     } catch (error) {
-        console.error('获取预测失败:', error);
+        console.error('Failed to fetch predictions:', error);
         document.getElementById('predictionContent').innerHTML =
-            `<p>暂时无法获取预测数据</p>`;
+            `<p>Unable to load prediction data</p>`;
     }
 }
 
-// 更新异常检测
+// Update anomaly detection
 async function updateAnomalyDetection() {
     try {
         const response = await fetch('/api/prediction/anomaly');
@@ -427,15 +490,15 @@ async function updateAnomalyDetection() {
                     </div>
                     <div class="anomaly-stats">
                         <div class="anomaly-stat-item">
-                            <span class="label">今日坐姿:</span>
-                            <span class="value">${anomaly.today_sitting_hours}小时</span>
+                            <span class="label">Today's Sitting:</span>
+                            <span class="value">${anomaly.today_sitting_hours}h</span>
                         </div>
                         <div class="anomaly-stat-item">
-                            <span class="label">历史平均:</span>
-                            <span class="value">${anomaly.average_sitting_hours}小时</span>
+                            <span class="label">Average:</span>
+                            <span class="value">${anomaly.average_sitting_hours}h</span>
                         </div>
                         <div class="anomaly-stat-item">
-                            <span class="label">偏差:</span>
+                            <span class="label">Deviation:</span>
                             <span class="value ${anomaly.deviation_percentage > 0 ? 'negative' : 'positive'}">
                                 ${anomaly.deviation_percentage > 0 ? '+' : ''}${anomaly.deviation_percentage}%
                             </span>
@@ -444,30 +507,30 @@ async function updateAnomalyDetection() {
                 </div>
             `;
         } else {
-            content.innerHTML = `<p>暂无足够数据进行异常检测</p>`;
+            content.innerHTML = `<p>Insufficient data for anomaly detection</p>`;
         }
     } catch (error) {
-        console.error('获取异常检测失败:', error);
+        console.error('Failed to fetch anomaly detection:', error);
     }
 }
 
-// 更新智能行为预测
+// Update behavior prediction
 async function updateBehaviorPrediction() {
     try {
-        // 获取当前状态
+        // Get current state
         const currentResponse = await fetch('/api/stats/current');
         const currentResult = await currentResponse.json();
 
         let currentState = 'unknown';
-        if (currentResult.success && currentResult.has_session && currentResult.data) {
+        if (currentResult.success && currentResult.has_session && currentResult.data && currentResult.data.state) {
             currentState = currentResult.data.state;
         }
 
-        // 获取预测
+        // Get prediction
         const predictionResponse = await fetch('/api/behavior/predict_current_state');
         const predictionResult = await predictionResponse.json();
 
-        // 获取建议
+        // Get suggestion
         const suggestionResponse = await fetch(`/api/behavior/smart_suggestion?current_state=${currentState}`);
         const suggestionResult = await suggestionResponse.json();
 
@@ -486,11 +549,11 @@ async function updateBehaviorPrediction() {
             };
 
             const stateNames = {
-                'sitting': '坐姿',
-                'standing': '站立',
-                'lying': '躺卧',
-                'sleeping': '睡眠',
-                'unknown': '未知'
+                'sitting': 'Sitting',
+                'standing': 'Standing',
+                'lying': 'Lying',
+                'sleeping': 'Sleeping',
+                'unknown': 'Unknown'
             };
 
             let matchIcon = suggestion.match ? '✅' : '💡';
@@ -500,20 +563,20 @@ async function updateBehaviorPrediction() {
                 <div class="behavior-prediction">
                     <div class="prediction-row">
                         <div class="prediction-item-behavior">
-                            <h4>📊 根据历史规律</h4>
+                            <h4>📊 Historical Pattern</h4>
                             <p class="prediction-value-behavior">
                                 ${stateIcons[prediction.predicted_state]} ${stateNames[prediction.predicted_state]}
                             </p>
-                            <p class="prediction-confidence">置信度: ${(prediction.confidence * 100).toFixed(0)}%</p>
+                            <p class="prediction-confidence">Confidence: ${(prediction.confidence * 100).toFixed(0)}%</p>
                             <p class="prediction-explanation">${prediction.explanation}</p>
                         </div>
                         <div class="prediction-item-behavior">
-                            <h4>🎯 当前实际状态</h4>
+                            <h4>🎯 Current Actual State</h4>
                             <p class="prediction-value-behavior">
                                 ${stateIcons[currentState]} ${stateNames[currentState]}
                             </p>
                             <p class="prediction-match ${matchClass}">
-                                ${matchIcon} ${suggestion.match ? '符合习惯' : '与习惯不符'}
+                                ${matchIcon} ${suggestion.match ? 'Matches Pattern' : 'Differs from Pattern'}
                             </p>
                         </div>
                     </div>
@@ -523,16 +586,16 @@ async function updateBehaviorPrediction() {
                 </div>
             `;
         } else {
-            content.innerHTML = `<p>📊 累积更多数据后将提供智能行为预测...</p>`;
+            content.innerHTML = `<p>📊 Behavior predictions will be available after collecting more data...</p>`;
         }
     } catch (error) {
-        console.error('获取行为预测失败:', error);
+        console.error('Failed to fetch behavior prediction:', error);
         document.getElementById('behaviorPredictionContent').innerHTML =
-            `<p>暂时无法获取行为预测</p>`;
+            `<p>Unable to load behavior prediction</p>`;
     }
 }
 
-// 更新日常作息
+// Update daily routine
 async function updateDailyRoutine() {
     try {
         const response = await fetch('/api/behavior/daily_routine');
@@ -544,11 +607,11 @@ async function updateDailyRoutine() {
             const routine = result.data;
 
             const stateNames = {
-                'sitting': '坐姿工作',
-                'standing': '站立活动',
-                'lying': '躺卧休息',
-                'sleeping': '睡眠',
-                'unknown': '活动未知'
+                'sitting': 'Sitting/Working',
+                'standing': 'Standing/Active',
+                'lying': 'Lying/Resting',
+                'sleeping': 'Sleeping',
+                'unknown': 'Unknown'
             };
 
             let routineHTML = '<div class="routine-timeline">';
@@ -566,20 +629,20 @@ async function updateDailyRoutine() {
             });
             routineHTML += '</div>';
             routineHTML += `<p class="routine-summary">${routine.summary}</p>`;
-            routineHTML += `<p class="routine-note">基于${routine.analysis_period}的数据分析</p>`;
+            routineHTML += `<p class="routine-note">Based on ${routine.analysis_period} of data</p>`;
 
             content.innerHTML = routineHTML;
         } else {
-            content.innerHTML = `<p>累积更多数据后将生成作息总结...</p>`;
+            content.innerHTML = `<p>Routine summary will be generated after collecting more data...</p>`;
         }
     } catch (error) {
-        console.error('获取日常作息失败:', error);
+        console.error('Failed to fetch daily routine:', error);
         document.getElementById('routineContent').innerHTML =
-            `<p>暂时无法获取作息数据</p>`;
+            `<p>Unable to load routine data</p>`;
     }
 }
 
-// 刷新所有数据
+// Refresh all data
 async function refreshAllData() {
     await Promise.all([
         updateCurrentSession(),
@@ -597,26 +660,26 @@ async function refreshAllData() {
     startRefreshCountdown();
 }
 
-// 初始化
+// Initialize
 async function init() {
-    console.log('初始化仪表盘...');
+    console.log('Initializing dashboard...');
 
-    // 首次加载数据
+    // Load data for the first time
     await refreshAllData();
 
-    // 设置自动刷新（每30秒）
+    // Set up auto-refresh (every 30 seconds)
     if (refreshInterval) {
         clearInterval(refreshInterval);
     }
     refreshInterval = setInterval(refreshAllData, 30000);
 
-    console.log('仪表盘初始化完成');
+    console.log('Dashboard initialized');
 }
 
-// 页面加载完成后初始化
+// Initialize after page load
 document.addEventListener('DOMContentLoaded', init);
 
-// 页面卸载时清理定时器
+// Clean up timers on page unload
 window.addEventListener('beforeunload', () => {
     if (refreshInterval) clearInterval(refreshInterval);
     if (countdownInterval) clearInterval(countdownInterval);

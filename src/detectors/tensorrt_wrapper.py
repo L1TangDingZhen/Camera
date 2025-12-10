@@ -62,6 +62,7 @@ class TensorRTEngine:
         # Get input/output information
         self.input_names = []
         self.output_names = []
+        self.input_shapes = {}
 
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
@@ -70,12 +71,17 @@ class TensorRTEngine:
 
             if self.engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
                 self.input_names.append(name)
+                # Handle dynamic shapes: replace -1 with 1 for batch size
+                concrete_shape = tuple(1 if s == -1 else s for s in shape)
+                self.input_shapes[name] = concrete_shape
+                # Set concrete input shape in context
+                self.context.set_input_shape(name, concrete_shape)
             else:
                 self.output_names.append(name)
 
             print(f"[TensorRT]   Tensor: {name}, Shape: {shape}, Dtype: {dtype}")
 
-        # Allocate device memory
+        # Allocate device memory (after setting input shapes)
         self._allocate_buffers()
 
         print(f"[TensorRT] Engine loaded successfully")
@@ -88,9 +94,10 @@ class TensorRTEngine:
         self.outputs = {}
 
         for name in self.input_names:
-            shape = self.engine.get_tensor_shape(name)
+            # Use concrete shape set earlier (with batch size = 1)
+            shape = self.input_shapes[name]
             dtype = trt.nptype(self.engine.get_tensor_dtype(name))
-            size = trt.volume(shape)
+            size = int(np.prod(shape))
 
             # Allocate device memory
             device_mem = cuda.mem_alloc(size * np.dtype(dtype).itemsize)
@@ -102,16 +109,20 @@ class TensorRTEngine:
             }
 
         for name in self.output_names:
+            # Get output shape and convert dynamic dimensions
             shape = self.engine.get_tensor_shape(name)
+            # Replace -1 dimensions with 1 (based on input batch size = 1)
+            concrete_shape = tuple(1 if s == -1 else s for s in shape)
+
             dtype = trt.nptype(self.engine.get_tensor_dtype(name))
-            size = trt.volume(shape)
+            size = int(np.prod(concrete_shape))
 
             # Allocate device and host memory
             device_mem = cuda.mem_alloc(size * np.dtype(dtype).itemsize)
-            host_mem = np.empty(shape, dtype=dtype)
+            host_mem = np.empty(concrete_shape, dtype=dtype)
 
             self.outputs[name] = {
-                'shape': shape,
+                'shape': concrete_shape,
                 'dtype': dtype,
                 'device': device_mem,
                 'host': host_mem

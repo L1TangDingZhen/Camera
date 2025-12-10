@@ -1,4 +1,4 @@
-/* 全局样式 */
+/* Global Styles */
 * {
     margin: 0;
     padding: 0;
@@ -6,11 +6,11 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Liberation Sans', sans-serif;
+    background: #1A1A1A;
     min-height: 100vh;
     padding: 20px;
-    color: #333;
+    color: #E8E3D8;
 }
 
 .container {
@@ -18,60 +18,70 @@ body {
     margin: 0 auto;
 }
 
-/* 标题栏 */
+/* Header */
 .header {
     text-align: center;
-    color: white;
+    color: #E8E3D8;
     margin-bottom: 30px;
+    background: #252525;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    border: 1px solid #2F2F2F;
 }
 
 .header h1 {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     margin-bottom: 10px;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+    color: #E8E3D8;
 }
 
 .subtitle {
-    font-size: 1.1rem;
-    opacity: 0.9;
+    font-size: 1rem;
+    color: #A39D8E;
+    font-weight: 400;
 }
 
-/* 卡片样式 */
+/* Card Styles */
 .card {
-    background: white;
-    border-radius: 15px;
-    padding: 25px;
-    margin-bottom: 25px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: #252525;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: box-shadow 0.2s ease;
+    border: 1px solid #2F2F2F;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .card h2 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     margin-bottom: 20px;
-    color: #667eea;
-    border-bottom: 2px solid #f0f0f0;
-    padding-bottom: 10px;
+    color: #E8E3D8;
+    border-bottom: 1px solid #2F2F2F;
+    padding-bottom: 12px;
+    font-weight: 500;
 }
 
-/* 警告框 */
+/* Alert Box */
 .alert {
     display: flex;
     align-items: center;
-    padding: 20px;
+    padding: 18px 20px;
     border-radius: 10px;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
     animation: shake 0.5s;
+    border: 1px solid;
 }
 
 .alert-danger {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-    color: white;
+    background: #3A2A1F;
+    color: #F9A555;
+    border-color: #4A3A2F;
 }
 
 .alert-icon {
@@ -90,15 +100,16 @@ body {
     75% { transform: translateX(10px); }
 }
 
-/* 当前会话 */
+/* Current Session */
 .current-session {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #2A2520;
+    color: #E8E3D8;
+    border: 1px solid #3A3530;
 }
 
 .current-session h2 {
-    color: white;
-    border-bottom-color: rgba(255, 255, 255, 0.3);
+    color: #E8E3D8;
+    border-bottom-color: #3A3530;
 }
 
 .session-info {
@@ -109,24 +120,26 @@ body {
 }
 
 .session-item {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 15px;
+    background: #1F1F1F;
+    padding: 16px;
     border-radius: 8px;
-    backdrop-filter: blur(10px);
+    border: 1px solid #3A3530;
 }
 
 .session-item h4 {
-    font-size: 0.9rem;
-    opacity: 0.9;
-    margin-bottom: 5px;
+    font-size: 0.875rem;
+    color: #A39D8E;
+    margin-bottom: 8px;
+    font-weight: 500;
 }
 
 .session-item p {
     font-size: 1.5rem;
-    font-weight: bold;
+    font-weight: 500;
+    color: #E8E3D8;
 }
 
-/* 统计卡片网格 */
+/* Stats Card Grid */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -147,23 +160,23 @@ body {
 
 .stat-content h3 {
     font-size: 1rem;
-    color: #666;
+    color: #A39D8E;
     margin-bottom: 5px;
 }
 
 .stat-value {
     font-size: 2rem;
-    font-weight: bold;
-    color: #667eea;
+    font-weight: 500;
+    color: #D4A574;
     margin-bottom: 5px;
 }
 
 .stat-label {
     font-size: 0.85rem;
-    color: #999;
+    color: #8A8478;
 }
 
-/* 坐姿详细统计 */
+/* Sitting Details */
 .sitting-details-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -171,25 +184,25 @@ body {
 }
 
 .detail-item {
-    background: #f8f9fa;
+    background: #1F1F1F;
     padding: 15px;
     border-radius: 8px;
-    border-left: 4px solid #667eea;
+    border-left: 3px solid #D4A574;
 }
 
 .detail-item h4 {
     font-size: 0.9rem;
-    color: #666;
+    color: #A39D8E;
     margin-bottom: 8px;
 }
 
 .detail-item p {
     font-size: 1.3rem;
-    font-weight: bold;
-    color: #333;
+    font-weight: 500;
+    color: #E8E3D8;
 }
 
-/* 图表网格 */
+/* Charts Grid */
 .charts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -205,15 +218,16 @@ body {
     max-height: 350px;
 }
 
-/* 预测卡片 */
+/* Prediction Card */
 .prediction-card {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
+    background: #252A30;
+    color: #B8C5D6;
+    border: 1px solid #2F3540;
 }
 
 .prediction-card h2 {
-    color: white;
-    border-bottom-color: rgba(255, 255, 255, 0.3);
+    color: #B8C5D6;
+    border-bottom-color: #2F3540;
 }
 
 .prediction-content {
@@ -228,16 +242,16 @@ body {
 }
 
 .prediction-item {
-    background: rgba(255, 255, 255, 0.2);
+    background: #1F1F1F;
     padding: 20px;
     border-radius: 10px;
-    backdrop-filter: blur(10px);
+    border: 1px solid #2F3540;
 }
 
 .prediction-item h4 {
     font-size: 1rem;
     margin-bottom: 15px;
-    opacity: 0.9;
+    color: #B8C5D6;
 }
 
 .prediction-value {
@@ -258,9 +272,9 @@ body {
     opacity: 0.85;
 }
 
-/* 异常检测卡片 */
+/* Anomaly Detection Card */
 .anomaly-card {
-    background: white;
+    background: #252525;
 }
 
 .anomaly-result {
@@ -327,15 +341,16 @@ body {
     color: #28a745;
 }
 
-/* 智能行为预测卡片 */
+/* Behavior Prediction Card */
 .behavior-prediction-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #2A2530;
+    color: #C5B8D6;
+    border: 1px solid #3A3540;
 }
 
 .behavior-prediction-card h2 {
-    color: white;
-    border-bottom-color: rgba(255, 255, 255, 0.3);
+    color: #C5B8D6;
+    border-bottom-color: #3A3540;
 }
 
 .behavior-prediction {
@@ -350,10 +365,10 @@ body {
 }
 
 .prediction-item-behavior {
-    background: rgba(255, 255, 255, 0.15);
+    background: #1F1F1F;
     padding: 20px;
     border-radius: 10px;
-    backdrop-filter: blur(10px);
+    border: 1px solid #3A3540;
     text-align: center;
 }
 
@@ -391,11 +406,11 @@ body {
 }
 
 .smart-suggestion {
-    background: rgba(255, 255, 255, 0.2);
+    background: #1F1F1F;
     padding: 15px 20px;
     border-radius: 8px;
-    border-left: 5px solid;
-    backdrop-filter: blur(10px);
+    border-left: 4px solid;
+    border: 1px solid #3A3540;
 }
 
 .smart-suggestion.low {
@@ -416,9 +431,9 @@ body {
     line-height: 1.6;
 }
 
-/* 日常作息卡片 */
+/* Daily Routine Card */
 .routine-card {
-    background: white;
+    background: #252525;
 }
 
 .routine-timeline {
@@ -432,25 +447,25 @@ body {
     align-items: center;
     padding: 12px;
     margin-bottom: 10px;
-    background: #f8f9fa;
+    background: #1F1F1F;
     border-radius: 8px;
-    border-left: 4px solid #667eea;
+    border-left: 3px solid #D4A574;
 }
 
 .routine-time {
-    font-weight: bold;
-    color: #667eea;
+    font-weight: 500;
+    color: #D4A574;
     font-size: 0.95rem;
 }
 
 .routine-state {
-    color: #333;
+    color: #E8E3D8;
     font-size: 0.95rem;
 }
 
 .routine-bar {
     height: 8px;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: #D4A574;
     border-radius: 4px;
     transition: width 0.3s ease;
 }
@@ -458,39 +473,43 @@ body {
 .routine-summary {
     margin-top: 20px;
     padding: 15px;
-    background: #e3f2fd;
-    border-left: 4px solid #2196f3;
+    background: #252A30;
+    border-left: 4px solid #5A8AAA;
     border-radius: 4px;
     font-size: 0.95rem;
     line-height: 1.6;
+    color: #B8C5D6;
 }
 
 .routine-note {
     text-align: right;
     font-size: 0.85rem;
-    color: #999;
+    color: #8A8478;
     margin-top: 10px;
 }
 
-/* 页脚 */
+/* Footer */
 .footer {
     text-align: center;
-    color: white;
+    color: #A39D8E;
     margin-top: 30px;
     padding: 20px;
-    opacity: 0.9;
+    background: #252525;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    border: 1px solid #2F2F2F;
 }
 
 .footer p {
     margin: 5px 0;
 }
 
-/* 加载动画 */
+/* Loading Animation */
 .loading {
     text-align: center;
     padding: 20px;
-    font-size: 1.1rem;
-    color: #666;
+    font-size: 1rem;
+    color: #8A8478;
 }
 
 .loading::after {
@@ -504,7 +523,7 @@ body {
     60%, 100% { content: '...'; }
 }
 
-/* 响应式设计 */
+/* Responsive Design */
 @media (max-width: 768px) {
     .header h1 {
         font-size: 1.8rem;
