@@ -120,6 +120,61 @@ def load_data_from_json(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     return np.array(all_features, dtype=np.float32), np.array(all_labels, dtype=np.int64)
 
 
+def load_sequence_data_from_json(data_dir: str, seq_len: int = 10) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Load sequence data from JSON files (for LSTM/Transformer)
+
+    Args:
+        data_dir: training_data directory
+        seq_len: sequence length
+
+    Returns:
+        sequences: List of (seq_len, 68) arrays
+        labels: (N,) array
+    """
+    all_sequences = []
+    all_labels = []
+
+    label_mapping = {'sitting': 0, 'standing': 1, 'lying': 2}
+
+    for pose_label in ['sitting', 'standing', 'lying']:
+        filepath = os.path.join(data_dir, f"{pose_label}_samples.json")
+
+        if not os.path.exists(filepath):
+            print(f"[WARN] File not found: {filepath}")
+            continue
+
+        with open(filepath, 'r') as f:
+            samples = json.load(f)
+
+        print(f"[INFO] Loading {pose_label}: {len(samples)} samples")
+
+        valid_count = 0
+        for sample in samples:
+            # Check if sample has sequence data
+            if 'features_sequence' in sample:
+                sequence = np.array(sample['features_sequence'])  # (seq_len, 68)
+
+                # Ensure sequence length matches
+                if len(sequence) < seq_len:
+                    # Pad with first frame if sequence is too short
+                    padding = np.tile(sequence[0], (seq_len - len(sequence), 1))
+                    sequence = np.vstack([padding, sequence])
+                elif len(sequence) > seq_len:
+                    # Truncate if too long
+                    sequence = sequence[-seq_len:]
+
+                all_sequences.append(sequence)
+                all_labels.append(label_mapping[pose_label])
+                valid_count += 1
+
+        print(f"[INFO]   {valid_count} samples with sequence data")
+
+    if len(all_sequences) == 0:
+        raise ValueError("No sequence data found! Please collect data with sequence support.")
+
+    return all_sequences, np.array(all_labels, dtype=np.int64)
+
+
 def train_model(model, train_loader, val_loader, epochs, lr, device, model_type, save_path):
     """训练模型"""
 
@@ -245,34 +300,42 @@ def main():
     print(f"[INFO] 使用设备: {device}")
 
     # 加载数据
-    print(f"\n[INFO] 从 {args.data} 加载数据...")
-    features, labels = load_data_from_json(args.data)
-
-    print(f"[INFO] 总样本数: {len(features)}")
-    print(f"[INFO] 特征维度: {features.shape[1]}")
-
-    # 划分训练集和验证集
-    X_train, X_val, y_train, y_val = train_test_split(
-        features, labels, test_size=args.test_size, random_state=42, stratify=labels
-    )
-
-    print(f"[INFO] 训练集: {len(X_train)} 样本")
-    print(f"[INFO] 验证集: {len(X_val)} 样本")
+    print(f"\n[INFO] Loading data from {args.data}...")
 
     # 创建数据集和数据加载器
     if args.model == 'mlp':
+        features, labels = load_data_from_json(args.data)
+        print(f"[INFO] Total samples: {len(features)}")
+        print(f"[INFO] Feature dimension: {features.shape[1]}")
+
+        # 划分训练集和验证集
+        X_train, X_val, y_train, y_val = train_test_split(
+            features, labels, test_size=args.test_size, random_state=42, stratify=labels
+        )
+
+        print(f"[INFO] Training set: {len(X_train)} samples")
+        print(f"[INFO] Validation set: {len(X_val)} samples")
+
         train_dataset = PoseDataset(X_train, y_train)
         val_dataset = PoseDataset(X_val, y_val)
         model = PoseClassifierMLP(input_dim=68, hidden_dims=[128, 64, 32], num_classes=3)
 
     else:
-        # LSTM/Transformer需要序列数据
-        # 这里简化处理：将单帧数据复制成序列
-        print(f"[WARN] LSTM/Transformer需要序列数据，当前使用单帧重复填充")
-        print(f"[WARN] 建议使用 collect_data.py --sequence-mode 收集序列数据")
+        # LSTM/Transformer use sequence data
+        print(f"[INFO] Loading sequence data for {args.model.upper()}...")
+        sequences, labels = load_sequence_data_from_json(args.data, seq_len=args.seq_len)
 
-        train_sequences = [np.tile(X_train[i], (args.seq_len, 1)) for i in range(len(X_train))]
-        val_sequences = [np.tile(X_val[i], (args.seq_len, 1)) for i in range(len(X_val))]
+        print(f"[INFO] Total samples with sequences: {len(sequences)}")
+        print(f"[INFO] Sequence length: {args.seq_len}")
+        print(f"[INFO] Feature dimension: {sequences[0].shape[1]}")
+
+        # 划分训练集和验证集
+        train_sequences, val_sequences, y_train, y_val = train_test_split(
+            sequences, labels, test_size=args.test_size, random_state=42, stratify=labels
+        )
+
+        print(f"[INFO] Training set: {len(train_sequences)} samples")
+        print(f"[INFO] Validation set: {len(val_sequences)} samples")
 
         train_dataset = PoseSequenceDataset(train_sequences, y_train.tolist(), args.seq_len)
         val_dataset = PoseSequenceDataset(val_sequences, y_val.tolist(), args.seq_len)

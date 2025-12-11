@@ -209,6 +209,32 @@ class TrainingDataCleaner:
         end_time = f"{date} 23:59:59"
         return self.delete_by_time_range(label, start_time, end_time)
 
+    def delete_samples_without_timestamp(self, label: str):
+        """Delete all samples without timestamp
+
+        Args:
+            label: Data label
+        """
+        if label not in self.data or len(self.data[label]) == 0:
+            print(f"❌ {label} has no data")
+            return
+
+        samples = self.data[label]
+        original_count = len(samples)
+
+        # Keep only samples with timestamp
+        filtered = [s for s in samples if 'timestamp' in s]
+        deleted_count = original_count - len(filtered)
+
+        self.data[label] = filtered
+
+        print(f"\n{label.upper()}:")
+        print(f"  Original samples: {original_count}")
+        print(f"  Deleted samples (no timestamp): {deleted_count}")
+        print(f"  Remaining samples: {len(filtered)}")
+
+        return deleted_count
+
     def keep_recent_n_samples(self, label: str, n: int):
         """Keep only the most recent N samples
 
@@ -279,12 +305,13 @@ class TrainingDataCleaner:
             print("2. Backup current data")
             print("3. Delete data from specific date")
             print("4. Delete data from time range")
-            print("5. Keep only recent N samples")
-            print("6. Save and exit")
-            print("7. Exit without saving")
+            print("5. Delete samples without timestamp")
+            print("6. Keep only recent N samples")
+            print("7. Save and exit")
+            print("8. Exit without saving")
             print("=" * 60)
 
-            choice = input("Select operation (1-7): ").strip()
+            choice = input("Select operation (1-8): ").strip()
 
             if choice == '1':
                 self.show_statistics()
@@ -335,6 +362,18 @@ class TrainingDataCleaner:
                 if label not in self.labels:
                     print("❌ Invalid label")
                     continue
+
+                confirm = input(f"Will delete all {label} samples without timestamp, confirm? (yes/no): ").strip().lower()
+                if confirm == 'yes':
+                    self.delete_samples_without_timestamp(label)
+                else:
+                    print("Cancelled")
+
+            elif choice == '6':
+                label = input("Label (sitting/standing/lying): ").strip()
+                if label not in self.labels:
+                    print("❌ Invalid label")
+                    continue
                 n = input("Number of samples to keep: ").strip()
                 try:
                     n = int(n)
@@ -346,7 +385,7 @@ class TrainingDataCleaner:
                 except ValueError:
                     print("❌ Invalid number")
 
-            elif choice == '6':
+            elif choice == '7':
                 confirm = input("\nConfirm saving changes? (yes/no): ").strip().lower()
                 if confirm == 'yes':
                     self.save_data()
@@ -354,7 +393,7 @@ class TrainingDataCleaner:
                 else:
                     print("Save cancelled")
 
-            elif choice == '7':
+            elif choice == '8':
                 confirm = input("\nConfirm exit without saving? (yes/no): ").strip().lower()
                 if confirm == 'yes':
                     print("Exited without saving changes")
@@ -378,6 +417,7 @@ def main():
     parser.add_argument('--delete-date', metavar='DATE', help='Delete data from specific date (YYYY-MM-DD)')
     parser.add_argument('--delete-start', metavar='TIME', help='Delete start time (YYYY-MM-DD)')
     parser.add_argument('--delete-end', metavar='TIME', help='Delete end time (YYYY-MM-DD)')
+    parser.add_argument('--delete-no-timestamp', action='store_true', help='Delete samples without timestamp')
     parser.add_argument('--keep-recent', type=int, metavar='N', help='Keep only the most recent N samples')
     parser.add_argument('--save', action='store_true', help='Save changes')
 
@@ -407,6 +447,10 @@ def main():
 
     if (args.delete_start or args.delete_end) and args.label:
         cleaner.delete_by_time_range(args.label, args.delete_start, args.delete_end)
+        modified = True
+
+    if args.delete_no_timestamp and args.label:
+        cleaner.delete_samples_without_timestamp(args.label)
         modified = True
 
     if args.keep_recent and args.label:
