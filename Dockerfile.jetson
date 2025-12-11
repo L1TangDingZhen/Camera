@@ -61,7 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip3 install --no-cache-dir -r requirements_jetson.txt \
+    && pip3 install --no-cache-dir --ignore-installed -r requirements_jetson.txt \
     && pip3 install --no-cache-dir openmim \
     && mim install mmengine==0.8.0 \
     && mim install mmcv==2.1.0 \
