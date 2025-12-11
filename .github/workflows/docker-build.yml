@@ -11,8 +11,17 @@ on:
 jobs:
   build-jetson:
     runs-on: ubuntu-latest
-    
+
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h
+
       - name: Checkout code
         uses: actions/checkout@v3
       
@@ -52,6 +61,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          provenance: false
+          sbom: false
       
       - name: Image digest
         run: echo "Image pushed successfully!"
