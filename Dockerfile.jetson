@@ -23,15 +23,14 @@
 #   - Performance: 1920x1080, 15-20 FPS, ~20-25W (config_jetson_performance.yaml)
 # ============================================================
 
-# Base image from NVIDIA L4T (Linux for Tegra) with PyTorch pre-installed
+# Base image from NVIDIA L4T ML (Machine Learning) with PyTorch pre-installed
 # This image includes:
 #   - Ubuntu 22.04 (aarch64)
 #   - Python 3.10
-#   - PyTorch 2.1.0 with CUDA 12.2 support
-#   - TorchVision 0.16.0
-#   - cuDNN 8.9, TensorRT 8.6
-#   - OpenCV 4.8.0
-FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3
+#   - PyTorch 2.1+ with CUDA 12.2 support
+#   - TensorFlow, TensorRT, cuDNN
+#   - OpenCV, NumPy, Pandas
+FROM nvcr.io/nvidia/l4t-ml:r36.2.0-py3
 
 LABEL maintainer="Life Tracker Team"
 LABEL version="2.0.0-jetson"
