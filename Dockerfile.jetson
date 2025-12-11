@@ -66,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip3 install --no-cache-dir openmim \
     && mim install mmengine==0.8.0 \
     && mim install mmcv==2.1.0 \
+    && PIP_NO_BUILD_ISOLATION=0 pip3 install --no-cache-dir "chumpy @ git+https://github.com/mattloper/chumpy.git@master" \
     && mim install mmpose==1.1.0 \
     && python3 -c "import mmcv; print(f'mmcv: {mmcv.__version__}')" \
     && python3 -c "import mmengine; print(f'mmengine: {mmengine.__version__}')" \
