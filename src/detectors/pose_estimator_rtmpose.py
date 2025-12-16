@@ -37,6 +37,7 @@ import numpy as np
 import torch
 
 from .pose_estimator_base import PoseEstimatorInterface, Keypoint
+from ..smoothers import AdaptiveSmoother
 
 
 class RTMPoseEstimator(PoseEstimatorInterface):
@@ -51,10 +52,42 @@ class RTMPoseEstimator(PoseEstimatorInterface):
         self.checkpoint = config.get('checkpoint', None)
         self.device = config.get('device', 'cuda:0')
         self.confidence = config.get('confidence', 0.3)
-        # 关键点平滑与置信度过滤
-        self.keypoint_smooth_alpha = config.get('keypoint_smooth_alpha', 0.0)  # 0 = 不平滑
-        self.keypoint_min_conf = config.get('keypoint_min_conf', 0.3)
-        self._last_keypoints: Optional[np.ndarray] = None
+
+        # ===== 自适应平滑器配置 =====
+        smoother_config = config.get('adaptive_smoother', {})
+        self.use_adaptive_smoother = smoother_config.get('enabled', False)
+
+        if self.use_adaptive_smoother:
+            # 使用新的四层自适应平滑系统
+            self.adaptive_smoother = AdaptiveSmoother(
+                # 第①层：置信度过滤
+                conf_threshold=smoother_config.get('conf_threshold', 0.5),
+                conf_enabled=smoother_config.get('conf_enabled', True),
+
+                # 第②层：速度自适应死区
+                static_deadzone=smoother_config.get('static_deadzone', 4.0),
+                moving_deadzone=smoother_config.get('moving_deadzone', 1.5),
+                speed_threshold=smoother_config.get('speed_threshold', 2.0),
+                deadzone_enabled=smoother_config.get('deadzone_enabled', True),
+
+                # 第③层：速度自适应 EMA
+                static_alpha=smoother_config.get('static_alpha', 0.1),
+                moving_alpha=smoother_config.get('moving_alpha', 0.4),
+                ema_enabled=smoother_config.get('ema_enabled', True),
+
+                # 第④层：速度限制
+                max_velocity=smoother_config.get('max_velocity', 50.0),
+                velocity_limit_enabled=smoother_config.get('velocity_limit_enabled', True),
+
+                # 调试
+                debug=smoother_config.get('debug', False)
+            )
+        else:
+            # 使用旧的平滑方式（向后兼容）
+            self.adaptive_smoother = None
+            self.keypoint_smooth_alpha = config.get('keypoint_smooth_alpha', 0.0)
+            self.keypoint_min_conf = config.get('keypoint_min_conf', 0.3)
+            self._last_keypoints: Optional[np.ndarray] = None
 
         # TensorRT配置
         self.tensorrt_config = config.get('tensorrt', {})
@@ -383,7 +416,10 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                         return None
 
                     # Apply keypoint smoothing
-                    keypoints = self._apply_keypoint_smoothing(keypoints)
+                    if self.adaptive_smoother is not None:
+                        keypoints = self.adaptive_smoother.process(keypoints)
+                    else:
+                        keypoints = self._apply_keypoint_smoothing(keypoints)
 
                     # Record inference time
                     inference_time = time.time() - start_time
@@ -408,7 +444,10 @@ class RTMPoseEstimator(PoseEstimatorInterface):
                 keypoints = self.trt_model(frame, bbox)
 
                 # 可选关键点平滑
-                keypoints = self._apply_keypoint_smoothing(keypoints)
+                if self.adaptive_smoother is not None:
+                    keypoints = self.adaptive_smoother.process(keypoints)
+                else:
+                    keypoints = self._apply_keypoint_smoothing(keypoints)
 
                 # Record inference time
                 inference_time = time.time() - start_time
@@ -485,7 +524,10 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             keypoints_with_scores = keypoints_with_scores.astype(np.float32)
 
             # 可选关键点平滑
-            keypoints_with_scores = self._apply_keypoint_smoothing(keypoints_with_scores)
+            if self.adaptive_smoother is not None:
+                keypoints_with_scores = self.adaptive_smoother.process(keypoints_with_scores)
+            else:
+                keypoints_with_scores = self._apply_keypoint_smoothing(keypoints_with_scores)
 
             return keypoints_with_scores
 
