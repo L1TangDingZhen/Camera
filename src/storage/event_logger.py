@@ -53,7 +53,8 @@ class EventLogger:
             timestamp=event.timestamp,
             state=event.state.value,
             zone=event.zone,
-            metadata=event.metadata
+            metadata=event.metadata,
+            tracking_id=event.tracking_id
         )
 
         # 写入日志文件

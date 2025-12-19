@@ -45,9 +45,13 @@ class Database:
                 state TEXT NOT NULL,
                 zone TEXT,
                 metadata TEXT,
+                tracking_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Migration: Add tracking_id column to existing table
+        self._migrate_add_tracking_id()
 
         # 创建索引
         cursor.execute("""
@@ -58,6 +62,11 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_events_type
             ON events(event_type)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_tracking_id
+            ON events(tracking_id)
         """)
 
         # 状态历史表
@@ -103,19 +112,34 @@ class Database:
         self.conn.commit()
         print("[Database] 数据表初始化完成")
 
+    def _migrate_add_tracking_id(self):
+        """Migration: Add tracking_id column to events table (if not exists)"""
+        cursor = self.conn.cursor()
+
+        # Check if column already exists
+        cursor.execute("PRAGMA table_info(events)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'tracking_id' not in columns:
+            print("[Database] Migration: Adding tracking_id column to events table...")
+            cursor.execute("ALTER TABLE events ADD COLUMN tracking_id INTEGER")
+            self.conn.commit()
+            print("[Database] Migration complete")
+
     # ==================== 事件操作 ====================
 
     def insert_event(self, event_type: str, timestamp: float, state: str,
-                    zone: Optional[str] = None, metadata: Optional[Dict] = None):
-        """插入事件"""
+                    zone: Optional[str] = None, metadata: Optional[Dict] = None,
+                    tracking_id: Optional[int] = None):
+        """Insert event"""
         cursor = self.conn.cursor()
 
         metadata_json = json.dumps(metadata) if metadata else None
 
         cursor.execute("""
-            INSERT INTO events (event_type, timestamp, state, zone, metadata)
-            VALUES (?, ?, ?, ?, ?)
-        """, (event_type, timestamp, state, zone, metadata_json))
+            INSERT INTO events (event_type, timestamp, state, zone, metadata, tracking_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (event_type, timestamp, state, zone, metadata_json, tracking_id))
 
         self.conn.commit()
 

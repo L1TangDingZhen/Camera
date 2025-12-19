@@ -22,7 +22,7 @@ import signal
 import sys
 
 from src.detectors import PersonDetector, PoseEstimatorFactory
-from src.state import BehaviorStateMachine, ROIManager
+from src.state import BehaviorStateMachine, ROIManager, MultiPersonManager
 from src.storage import EventLogger
 
 
@@ -51,8 +51,8 @@ class AsyncLifeTracker:
 
         # Create queues (limit size to avoid memory bloat)
         self.queue_frames = Queue(maxsize=2)       # Camera → YOLO
-        self.queue_bboxes = Queue(maxsize=2)       # YOLO → RTMPose
-        self.queue_keypoints = Queue(maxsize=2)    # RTMPose → StateMachine
+        self.queue_detections = Queue(maxsize=2)   # YOLO → Pose (multi-person support)
+        self.queue_results = Queue(maxsize=2)      # Pose → StateMachine (multi-person support)
 
         # Performance statistics
         self.stats = {
@@ -97,11 +97,22 @@ class AsyncLifeTracker:
         print("[Init] Creating event logger...")
         self.event_logger = EventLogger(self.config)
 
-        # 4. Create state machine
-        print("[Init] Creating state machine...")
-        self.state_machine = BehaviorStateMachine(
-            self.config, self.roi_manager, database=self.event_logger.db
-        )
+        # 4. Create state machine or multi-person manager
+        self.enable_multi_person = self.config['models']['person'].get('enable_tracking', False)
+
+        if self.enable_multi_person:
+            print("[Init] Creating multi-person manager...")
+            self.multi_person_manager = MultiPersonManager(
+                self.config, self.roi_manager, self.event_logger
+            )
+            self.state_machine = None
+            print(f"[Init] Multi-person mode enabled (max: {self.config['models']['person'].get('max_persons', 5)} persons)")
+        else:
+            print("[Init] Creating state machine (single-person mode)...")
+            self.state_machine = BehaviorStateMachine(
+                self.config, self.roi_manager, database=self.event_logger.db
+            )
+            self.multi_person_manager = None
 
         # 5. Initialize camera
         print("[Init] Opening camera...")
@@ -184,11 +195,11 @@ class AsyncLifeTracker:
     # Thread 2: YOLO detection thread (with detailed profiling)
     # =====================================================================
     def _detection_thread(self):
-        """Detect person every N frames, reuse cached bbox for intermediate frames"""
+        """Detect person every N frames, reuse cached data for intermediate frames"""
         print("[Thread 2] YOLO detection thread started")
         detection_interval = self.config['inference'].get('detection_interval', 3)
         frame_count = 0
-        cached_bbox = None
+        cached_data = None  # Cache either bbox (single-person) or detections list (multi-person)
         fps_time = time.time()
 
         # Detailed timing
@@ -214,21 +225,27 @@ class AsyncLifeTracker:
                 # Detect every N frames
                 if frame_count % detection_interval == 0:
                     t0 = time.time()
-                    bbox = self.person_detector.detect(frame)
+                    if self.enable_multi_person:
+                        # Multi-person detection
+                        detections = self.person_detector.detect_multi(frame)
+                        cached_data = detections
+                    else:
+                        # Single-person detection
+                        bbox = self.person_detector.detect(frame)
+                        cached_data = bbox
                     t1 = time.time()
                     detect_time = (t1 - t0) * 1000
                     timings['detect'].append(detect_time)
                     if self.enable_profiling:
                         self.timing_history['detection'].append(detect_time)
-                    cached_bbox = bbox
                 else:
-                    # Reuse cached bbox for intermediate frames
-                    bbox = cached_bbox
+                    # Reuse cached data for intermediate frames
+                    pass  # cached_data stays the same
 
                 # Put to next queue
                 t0 = time.time()
                 try:
-                    self.queue_bboxes.put((timestamp, frame, bbox), block=False)
+                    self.queue_detections.put((timestamp, frame, cached_data), block=False)
                 except:
                     pass  # Queue full, drop frame
                 t1 = time.time()
@@ -266,7 +283,7 @@ class AsyncLifeTracker:
     # Thread 3: RTMPose pose estimation thread (with detailed profiling)
     # =====================================================================
     def _pose_thread(self):
-        """Estimate pose from detected person bbox"""
+        """Estimate pose from detected person(s)"""
         print("[Thread 3] RTMPose pose thread started")
         frame_count = 0
         fps_time = time.time()
@@ -283,57 +300,93 @@ class AsyncLifeTracker:
             try:
                 t_start = time.time()
 
-                # Get data from queue
+                # Get data from queue (cached_data is either bbox or detections list)
                 t0 = time.time()
-                timestamp, frame, bbox = self.queue_bboxes.get(timeout=0.1)
+                timestamp, frame, cached_data = self.queue_detections.get(timeout=0.1)
                 t1 = time.time()
                 timings['queue_get'].append((t1 - t0) * 1000)
 
                 frame_count += 1
 
-                # Estimate pose with interval optimization
-                keypoints = None
-                world_landmarks = None
-                if bbox is not None:
-                    # Increment pose counter only when person is detected
-                    self.pose_frame_counter += 1
-                    # Check if we should run RTMPose or use cached result
-                    should_estimate = (self.pose_frame_counter % self.pose_interval == 1)
+                if self.enable_multi_person:
+                    # Multi-person mode: process each detection
+                    detections = cached_data  # This is a list of detections
+                    results = []
 
-                    if should_estimate:
-                        # Run RTMPose estimation
-                        t0 = time.time()
-                        keypoints = self.pose_estimator.estimate(frame, bbox)
-                        t1 = time.time()
-                        pose_time = (t1 - t0) * 1000
-                        timings['estimate'].append(pose_time)
-                        if self.enable_profiling:
-                            self.timing_history['pose_estimation'].append(pose_time)
+                    t0 = time.time()
+                    if detections:
+                        for detection in detections:
+                            bbox = detection['bbox']
+                            tracking_id = detection['tracking_id']
 
-                        # Cache the result
-                        self.cached_keypoints = keypoints
-                    else:
-                        # Use cached keypoints
-                        keypoints = self.cached_keypoints
-                        # Record 0ms for cached frames
-                        timings['estimate'].append(0.0)
-                        if self.enable_profiling:
-                            self.timing_history['pose_estimation'].append(0.0)
+                            # Estimate pose for this person
+                            keypoints = self.pose_estimator.estimate(frame, bbox)
 
-                    if hasattr(self.pose_estimator, 'get_world_landmarks'):
-                        world_landmarks = self.pose_estimator.get_world_landmarks()
+                            # Add keypoints to detection dict
+                            result = detection.copy()
+                            result['keypoints'] = keypoints
+                            results.append(result)
+                    t1 = time.time()
+                    pose_time = (t1 - t0) * 1000 if detections else 0.0
+                    timings['estimate'].append(pose_time)
+                    if self.enable_profiling:
+                        self.timing_history['pose_estimation'].append(pose_time)
 
-                # Put to next queue
-                t0 = time.time()
-                try:
-                    self.queue_keypoints.put(
-                        (timestamp, frame, bbox, keypoints, world_landmarks),
-                        block=False
-                    )
-                except:
-                    pass  # Queue full, drop frame
-                t1 = time.time()
-                timings['queue_put'].append((t1 - t0) * 1000)
+                    # Put results to next queue
+                    t0 = time.time()
+                    try:
+                        self.queue_results.put((timestamp, frame, results), block=False)
+                    except:
+                        pass  # Queue full, drop frame
+                    t1 = time.time()
+                    timings['queue_put'].append((t1 - t0) * 1000)
+
+                else:
+                    # Single-person mode: original logic with caching
+                    bbox = cached_data  # This is a single bbox
+                    keypoints = None
+                    world_landmarks = None
+
+                    if bbox is not None:
+                        # Increment pose counter only when person is detected
+                        self.pose_frame_counter += 1
+                        # Check if we should run RTMPose or use cached result
+                        should_estimate = (self.pose_frame_counter % self.pose_interval == 1)
+
+                        if should_estimate:
+                            # Run RTMPose estimation
+                            t0 = time.time()
+                            keypoints = self.pose_estimator.estimate(frame, bbox)
+                            t1 = time.time()
+                            pose_time = (t1 - t0) * 1000
+                            timings['estimate'].append(pose_time)
+                            if self.enable_profiling:
+                                self.timing_history['pose_estimation'].append(pose_time)
+
+                            # Cache the result
+                            self.cached_keypoints = keypoints
+                        else:
+                            # Use cached keypoints
+                            keypoints = self.cached_keypoints
+                            # Record 0ms for cached frames
+                            timings['estimate'].append(0.0)
+                            if self.enable_profiling:
+                                self.timing_history['pose_estimation'].append(0.0)
+
+                        if hasattr(self.pose_estimator, 'get_world_landmarks'):
+                            world_landmarks = self.pose_estimator.get_world_landmarks()
+
+                    # Put to next queue
+                    t0 = time.time()
+                    try:
+                        self.queue_results.put(
+                            (timestamp, frame, bbox, keypoints, world_landmarks),
+                            block=False
+                        )
+                    except:
+                        pass  # Queue full, drop frame
+                    t1 = time.time()
+                    timings['queue_put'].append((t1 - t0) * 1000)
 
                 t_end = time.time()
                 timings['total'].append((t_end - t_start) * 1000)
@@ -396,10 +449,16 @@ class AsyncLifeTracker:
             try:
                 t_start = time.time()
 
-                # Get data from queue
+                # Get data from queue (different structure for multi vs single)
                 t0 = time.time()
-                timestamp, frame, bbox, keypoints, world_landmarks = \
-                    self.queue_keypoints.get(timeout=0.1)
+                if self.enable_multi_person:
+                    # Multi-person: (timestamp, frame, results)
+                    # results is list of {bbox, tracking_id, confidence, keypoints}
+                    timestamp, frame, results = self.queue_results.get(timeout=0.1)
+                else:
+                    # Single-person: (timestamp, frame, bbox, keypoints, world_landmarks)
+                    timestamp, frame, bbox, keypoints, world_landmarks = \
+                        self.queue_results.get(timeout=0.1)
                 t1 = time.time()
                 timings['queue_get'].append((t1 - t0) * 1000)
 
@@ -408,7 +467,58 @@ class AsyncLifeTracker:
 
                 # Update state machine
                 t0 = time.time()
-                events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
+                if self.enable_multi_person:
+                    # Multi-person mode: use MultiPersonManager
+                    # Convert results back to detections for update_multi
+                    detections = []
+                    for result in results:
+                        detections.append({
+                            'bbox': result['bbox'],
+                            'tracking_id': result['tracking_id'],
+                            'confidence': result['confidence']
+                        })
+
+                    # Note: MultiPersonManager.update_multi does pose estimation internally
+                    # So we need to pass the keypoints separately
+                    # For now, we'll store keypoints in manager before calling update
+                    for result in results:
+                        tid = result['tracking_id']
+                        self.multi_person_manager.person_keypoints[tid] = result['keypoints']
+                        self.multi_person_manager.person_bboxes[tid] = result['bbox']
+
+                    # Update states for all persons (without re-estimating pose)
+                    events = []
+                    for result in results:
+                        tid = result['tracking_id']
+                        bbox = result['bbox']
+                        keypoints = result['keypoints']
+
+                        # Create or get state machine for this person
+                        if tid not in self.multi_person_manager.state_machines:
+                            from src.state import BehaviorStateMachine
+                            self.multi_person_manager.state_machines[tid] = BehaviorStateMachine(
+                                self.config, self.roi_manager, person_id=tid
+                            )
+
+                        # Update state machine
+                        self.multi_person_manager.last_update_times[tid] = current_time
+                        person_events = self.multi_person_manager.state_machines[tid].update(
+                            bbox, keypoints, current_time, None
+                        )
+
+                        # Add tracking_id to events
+                        for event in person_events:
+                            event.tracking_id = tid
+                        events.extend(person_events)
+
+                    # Cleanup inactive trackers
+                    self.multi_person_manager._cleanup_inactive_trackers(
+                        current_time, set(r['tracking_id'] for r in results)
+                    )
+                else:
+                    # Single-person mode
+                    events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
+
                 t1 = time.time()
                 state_time = (t1 - t0) * 1000
                 timings['state_machine'].append(state_time)
@@ -422,7 +532,10 @@ class AsyncLifeTracker:
                 # Visualization
                 if self.show_visualization:
                     t0 = time.time()
-                    vis_frame = self._visualize(frame, bbox, keypoints, fps)
+                    if self.enable_multi_person:
+                        vis_frame = self._visualize_multi(frame, results, fps)
+                    else:
+                        vis_frame = self._visualize(frame, bbox, keypoints, fps)
                     t1 = time.time()
                     timings['visualize'].append((t1 - t0) * 1000)
 
@@ -553,6 +666,166 @@ class AsyncLifeTracker:
                 x1, y1 = keypoints[idx1, :2].astype(int)
                 x2, y2 = keypoints[idx2, :2].astype(int)
                 cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Blue color like main.py
+
+    def _visualize_multi(self, frame: np.ndarray, results: list, fps: float) -> np.ndarray:
+        """
+        Multi-person visualization
+
+        Args:
+            frame: Original frame
+            results: List of detection results [{bbox, tracking_id, confidence, keypoints}, ...]
+            fps: Frame rate
+
+        Returns:
+            Visualized frame
+        """
+        vis_frame = frame.copy()
+
+        # Draw ROI zones
+        if getattr(self, 'show_roi', True):
+            vis_frame = self.roi_manager.draw_zones(vis_frame)
+
+        # Define colors for different tracking_ids
+        colors = {
+            0: (255, 100, 100),   # Light blue
+            1: (100, 255, 100),   # Light green
+            2: (100, 100, 255),   # Light red
+            3: (255, 255, 100),   # Light cyan
+            4: (255, 100, 255),   # Light magenta
+        }
+
+        # Draw each person
+        for result in results:
+            tracking_id = result['tracking_id']
+            bbox = result['bbox']
+            keypoints = result.get('keypoints')
+
+            # Get color for this tracking_id
+            color = colors.get(tracking_id % len(colors), (0, 255, 0))
+
+            # Draw bbox
+            x1, y1, x2, y2 = bbox[:4].astype(int)
+            cv2.rectangle(vis_frame, (x1, y1), (x2, y2), color, 3)
+
+            # Draw skeleton if keypoints available
+            if keypoints is not None:
+                self._draw_skeleton_for_person(vis_frame, keypoints, bbox, color)
+
+            # Get person state if available
+            person_state = "unknown"
+            if self.multi_person_manager:
+                state = self.multi_person_manager.get_person_state(tracking_id)
+                if state:
+                    person_state = state
+
+            # Draw label with tracking_id and state
+            label = f"ID:{tracking_id} [{person_state}]"
+            label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+
+            # Label background
+            cv2.rectangle(
+                vis_frame,
+                (x1, y1 - label_size[1] - 10),
+                (x1 + label_size[0] + 10, y1),
+                color,
+                -1
+            )
+
+            # Label text
+            cv2.putText(
+                vis_frame,
+                label,
+                (x1 + 5, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                2
+            )
+
+        # Draw status (FPS, person count, etc.)
+        self._draw_status_multi(vis_frame, fps, len(results))
+
+        return vis_frame
+
+    def _draw_skeleton_for_person(self, frame: np.ndarray, keypoints: np.ndarray,
+                                   bbox: np.ndarray, color: tuple):
+        """
+        Draw skeleton for a single person in multi-person mode
+
+        Args:
+            frame: Frame to draw on
+            keypoints: Person's keypoints (17x3 array)
+            bbox: Person's bounding box
+            color: Color to use for this person
+        """
+        from src.detectors.base import Keypoint
+
+        # Define body part indices for confidence thresholds
+        lower_body_indices = {11, 12, 13, 14, 15, 16}  # hips, knees, ankles
+
+        # Confidence thresholds
+        upper_body_high = 0.3
+        upper_body_low = 0.25
+        lower_body_high = 0.55
+        lower_body_low = 0.4
+
+        # Max segment length based on bbox height
+        _, y1, _, y2, _ = bbox.astype(float)
+        max_seg_len = (y2 - y1) * 1.2
+
+        # Draw keypoints
+        for i, (x, y, conf) in enumerate(keypoints):
+            high = lower_body_high if i in lower_body_indices else upper_body_high
+            if conf > high:
+                cv2.circle(frame, (int(x), int(y)), 3, color, -1)
+
+        # Draw skeleton connections
+        connections = Keypoint.get_connections()
+        for idx1, idx2 in connections:
+            high1 = lower_body_high if idx1 in lower_body_indices else upper_body_high
+            high2 = lower_body_high if idx2 in lower_body_indices else upper_body_high
+            low1 = lower_body_low if idx1 in lower_body_indices else upper_body_low
+            low2 = lower_body_low if idx2 in lower_body_indices else upper_body_low
+
+            c1 = keypoints[idx1, 2]
+            c2 = keypoints[idx2, 2]
+            allow_line = ((c1 > high1 and c2 > low2) or (c2 > high2 and c1 > low1)) and (c1 > low1 and c2 > low2)
+
+            if allow_line:
+                x1, y1 = keypoints[idx1, :2].astype(int)
+                x2, y2 = keypoints[idx2, :2].astype(int)
+
+                # Skip overly long segments
+                seg_len = np.hypot(x1 - x2, y1 - y2)
+                if seg_len <= max_seg_len:
+                    cv2.line(frame, (x1, y1), (x2, y2), color, 2)
+
+    def _draw_status_multi(self, frame: np.ndarray, fps: float, person_count: int):
+        """Draw status info for multi-person mode"""
+        info_y = 30
+
+        # FPS
+        cv2.putText(frame, f"FPS: {fps:.1f}", (10, info_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+        info_y += 40
+        # Person count
+        cv2.putText(frame, f"Persons: {person_count}", (10, info_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+        # Active tracking count
+        if self.multi_person_manager:
+            active_count = self.multi_person_manager.get_active_person_count()
+            info_y += 40
+            cv2.putText(frame, f"Tracked: {active_count}", (10, info_y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+            # List all tracked persons and states
+            all_states = self.multi_person_manager.get_all_states()
+            for tracking_id, state in all_states.items():
+                info_y += 35
+                cv2.putText(frame, f"  ID {tracking_id}: {state}", (10, info_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     # =====================================================================
     # Main run method

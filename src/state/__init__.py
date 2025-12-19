@@ -5,6 +5,7 @@
 
 from .roi_manager import ROIManager, Zone
 from .behavior_state import BehaviorStateMachine, BehaviorState, BehaviorEvent
+from .multi_person_manager import MultiPersonManager
 
 __all__ = [
     'ROIManager',
@@ -12,4 +13,5 @@ __all__ = [
     'BehaviorStateMachine',
     'BehaviorState',
     'BehaviorEvent',
+    'MultiPersonManager',
 ]

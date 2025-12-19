@@ -197,7 +197,7 @@ class PoseClassifierDL:
             sequence_length: LSTM/Transformer需要的序列长度
         """
         self.model_path = model_path
-        self.model_type = model_type
+        self.model_type = model_type.lower()  # Convert to lowercase for consistency
         self.device = torch.device(device)
         self.sequence_length = sequence_length
 

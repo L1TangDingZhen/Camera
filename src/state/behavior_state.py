@@ -62,25 +62,29 @@ class BehaviorEvent:
     state: BehaviorState
     zone: Optional[str] = None
     metadata: Dict = field(default_factory=dict)
+    tracking_id: Optional[int] = None  # Multi-person tracking ID, None for single-person mode
 
     def __str__(self):
         dt = datetime.fromtimestamp(self.timestamp)
         zone_str = f" [{self.zone}]" if self.zone else ""
-        return f"[{dt.strftime('%Y-%m-%d %H:%M:%S')}] {self.event_type.value}{zone_str} - {self.state.value}"
+        person_str = f" [Person {self.tracking_id}]" if self.tracking_id is not None else ""
+        return f"[{dt.strftime('%Y-%m-%d %H:%M:%S')}]{person_str} {self.event_type.value}{zone_str} - {self.state.value}"
 
 
 class BehaviorStateMachine:
-    """行为状态机"""
+    """Behavior State Machine"""
 
-    def __init__(self, config: dict, roi_manager: Optional[ROIManager] = None, database=None):
+    def __init__(self, config: dict, roi_manager: Optional[ROIManager] = None, database=None, person_id: Optional[int] = None):
         """
         Args:
-            config: 配置字典
-            roi_manager: ROI管理器
-            database: Database实例（用于SessionTracker）
+            config: Configuration dictionary
+            roi_manager: ROI manager
+            database: Database instance (for SessionTracker)
+            person_id: Person ID (used in multi-person mode, None for single-person mode)
         """
         self.config = config
         self.roi_manager = roi_manager or ROIManager(config.get('roi', {}))
+        self.person_id = person_id  # Save person_id for multi-person mode
 
         # 阈值配置
         self.sitting_config = config.get('behavior', {}).get('sitting', {})

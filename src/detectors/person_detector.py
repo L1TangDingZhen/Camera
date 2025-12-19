@@ -1,10 +1,10 @@
 """
-基于YOLOv8的人体检测器
-支持PyTorch (.pt) 和 TensorRT (.engine) 模型
+YOLOv8-based person detector
+Supports PyTorch (.pt) and TensorRT (.engine) models
 """
 
 import time
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import numpy as np
 
 try:
@@ -16,32 +16,39 @@ from .base import DetectorInterface
 
 
 class PersonDetector(DetectorInterface):
-    """YOLOv8人体检测器"""
+    """YOLOv8 Person Detector"""
 
     def __init__(self, config: dict):
         super().__init__(config)
 
         if YOLO is None:
-            raise ImportError("请安装 ultralytics: pip install ultralytics")
+            raise ImportError("Please install ultralytics: pip install ultralytics")
 
         self.model_path = config.get('model', 'yolov8s.pt')
         self.confidence = config.get('confidence', 0.5)
         self.iou = config.get('iou', 0.45)
         self.device = config.get('device', 'cpu')
-        # 可选的 bbox 平滑与扩张配置
-        self.smooth_alpha = config.get('smooth_alpha', 0.0)  # 0 表示不平滑
-        self.expand_ratio = config.get('expand_ratio', 1.0)  # 1 表示不扩张
+
+        # Single-person detection config
+        self.smooth_alpha = config.get('smooth_alpha', 0.0)  # 0 = no smoothing
+        self.expand_ratio = config.get('expand_ratio', 1.0)  # 1 = no expansion
         self._last_bbox = None
 
-        # 性能统计
+        # Multi-person detection and tracking config
+        self.enable_tracking = config.get('enable_tracking', False)
+        self.max_persons = config.get('max_persons', 5)  # Max 5 persons to track
+        self._last_bboxes = {}  # tracking_id -> bbox (for smoothing)
+
+        # Performance statistics
         self.inference_times = []
 
-        # 加载模型
-        print(f"[PersonDetector] 加载模型: {self.model_path}")
-        print(f"[PersonDetector] 设备: {self.device}")
+        # Load model
+        print(f"[PersonDetector] Loading model: {self.model_path}")
+        print(f"[PersonDetector] Device: {self.device}")
 
         try:
-            self.model = YOLO(self.model_path)
+            # Explicitly specify task='detect' to eliminate warnings
+            self.model = YOLO(self.model_path, task='detect')
 
             # Check if model is TensorRT engine or PyTorch model
             self.is_tensorrt = self.model_path.endswith('.engine')
@@ -55,26 +62,26 @@ class PersonDetector(DetectorInterface):
             dummy_frame = np.zeros((640, 640, 3), dtype=np.uint8)
             _ = self.model(dummy_frame, verbose=False, device=self.device)
 
-            print(f"[PersonDetector] 模型加载成功")
+            print(f"[PersonDetector] Model loaded successfully")
 
         except Exception as e:
-            print(f"[PersonDetector] 模型加载失败: {e}")
+            print(f"[PersonDetector] Model loading failed: {e}")
             raise
 
     def detect(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """
-        检测画面中的人体（只检测第一个人）
+        Detect person in frame (only first person)
 
         Args:
-            frame: 输入图像 (H, W, 3)
+            frame: Input image (H, W, 3)
 
         Returns:
-            bbox: [x1, y1, x2, y2, confidence] 或 None
+            bbox: [x1, y1, x2, y2, confidence] or None
         """
         start_time = time.time()
 
         try:
-            # YOLO推理
+            # YOLO inference
             results = self.model(
                 frame,
                 conf=self.confidence,
@@ -84,13 +91,13 @@ class PersonDetector(DetectorInterface):
                 device=self.device
             )
 
-            # 记录推理时间
+            # Record inference time
             inference_time = time.time() - start_time
             self.inference_times.append(inference_time)
             if len(self.inference_times) > 100:
                 self.inference_times.pop(0)
 
-            # 提取结果
+            # Extract results
             if len(results) == 0:
                 return None
 
@@ -99,19 +106,19 @@ class PersonDetector(DetectorInterface):
             if boxes is None or len(boxes) == 0:
                 return None
 
-            # 只取第一个检测结果（单人场景）
+            # Only take first detection (single-person scenario)
             box = boxes[0]
             x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
             confidence = box.conf[0].cpu().numpy()
 
             bbox = np.array([x1, y1, x2, y2, confidence], dtype=np.float32)
 
-            # 平滑 bbox（指数滑动）
+            # Smooth bbox (exponential moving average)
             if self.smooth_alpha > 0 and self._last_bbox is not None:
                 bbox[:4] = self.smooth_alpha * bbox[:4] + (1 - self.smooth_alpha) * self._last_bbox[:4]
                 bbox[4] = self.smooth_alpha * bbox[4] + (1 - self.smooth_alpha) * self._last_bbox[4]
 
-            # 扩张 bbox
+            # Expand bbox
             if self.expand_ratio != 1.0:
                 cx = (bbox[0] + bbox[2]) / 2
                 cy = (bbox[1] + bbox[3]) / 2
@@ -129,11 +136,116 @@ class PersonDetector(DetectorInterface):
             return bbox
 
         except Exception as e:
-            print(f"[PersonDetector] 检测失败: {e}")
+            print(f"[PersonDetector] Detection failed: {e}")
             return None
 
+    def detect_multi(self, frame: np.ndarray) -> List[Dict]:
+        """
+        Detect multiple persons in frame and track them
+
+        Args:
+            frame: Input image (H, W, 3)
+
+        Returns:
+            List[Dict]: Detection results list, each dict contains:
+                {
+                    'bbox': np.ndarray [x1, y1, x2, y2, confidence],
+                    'tracking_id': int,
+                    'confidence': float
+                }
+                Returns empty list if no persons detected
+        """
+        start_time = time.time()
+
+        try:
+            # Use YOLO's track feature for multi-object tracking
+            results = self.model.track(
+                frame,
+                conf=self.confidence,
+                iou=self.iou,
+                classes=[0],  # 0 = person in COCO dataset
+                verbose=False,
+                device=self.device,
+                persist=True,  # Persist tracker state
+                tracker="bytetrack.yaml"  # Use ByteTrack
+            )
+
+            # Record inference time
+            inference_time = time.time() - start_time
+            self.inference_times.append(inference_time)
+            if len(self.inference_times) > 100:
+                self.inference_times.pop(0)
+
+            # Extract results
+            if len(results) == 0:
+                return []
+
+            boxes = results[0].boxes
+
+            if boxes is None or len(boxes) == 0:
+                return []
+
+            # Extract all detected persons
+            detections = []
+
+            for i, box in enumerate(boxes):
+                # Skip if exceeds max tracking persons
+                if i >= self.max_persons:
+                    break
+
+                # Extract bbox coordinates and confidence
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                confidence = float(box.conf[0].cpu().numpy())
+
+                # Extract tracking ID (if available)
+                if hasattr(box, 'id') and box.id is not None:
+                    tracking_id = int(box.id[0].cpu().numpy())
+                else:
+                    # If no ID, use index as temporary ID
+                    tracking_id = i
+
+                bbox = np.array([x1, y1, x2, y2, confidence], dtype=np.float32)
+
+                # Smooth bbox (per tracking_id)
+                if self.smooth_alpha > 0 and tracking_id in self._last_bboxes:
+                    last_bbox = self._last_bboxes[tracking_id]
+                    bbox[:4] = self.smooth_alpha * bbox[:4] + (1 - self.smooth_alpha) * last_bbox[:4]
+                    bbox[4] = self.smooth_alpha * bbox[4] + (1 - self.smooth_alpha) * last_bbox[4]
+
+                # Expand bbox
+                if self.expand_ratio != 1.0:
+                    cx = (bbox[0] + bbox[2]) / 2
+                    cy = (bbox[1] + bbox[3]) / 2
+                    w = (bbox[2] - bbox[0]) * self.expand_ratio
+                    h = (bbox[3] - bbox[1]) * self.expand_ratio
+                    bbox = np.array([
+                        max(0.0, cx - w / 2),
+                        max(0.0, cy - h / 2),
+                        cx + w / 2,
+                        cy + h / 2,
+                        bbox[4]
+                    ], dtype=np.float32)
+
+                # Save current bbox for next frame smoothing
+                self._last_bboxes[tracking_id] = bbox.copy()
+
+                # Add to detection list
+                detections.append({
+                    'bbox': bbox,
+                    'tracking_id': tracking_id,
+                    'confidence': confidence
+                })
+
+            return detections
+
+        except Exception as e:
+            print(f"[PersonDetector] Multi-person detection failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     def get_performance_metrics(self) -> Dict[str, float]:
-        """获取性能指标"""
+        """Get performance metrics"""
         if not self.inference_times:
             return {
                 'avg_inference_time': 0.0,

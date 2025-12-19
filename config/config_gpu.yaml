@@ -17,6 +17,10 @@ models:
     smooth_alpha: 0.0   # 0=off; >0 enables EMA smoothing of bbox (higher=more smooth)
     expand_ratio: 1.15  # 1.15 = expand bbox by 15% (helps with low contrast scenarios)
 
+    # Multi-person detection and tracking
+    enable_tracking: true   # Enable multi-person detection and tracking (ByteTrack)
+    max_persons: 5          # Maximum number of persons to track simultaneously
+
   # ========================================================================
   # Pose Estimation Model Configuration - Model Switching Location
   # ========================================================================
@@ -204,8 +208,8 @@ behavior:
     # Uncomment lines below to enable deep learning classifier
     #
     type: deep_learning  # 👈 Change to this!
-    model_type: lstm      # Options: mlp, lstm, transformer
-    path: models/pose_classifier_lstm.pth
+    model_type: transformer     # Options: mlp, lstm, transformer
+    path: models/pose_classifier_transformer.pth
     device: cuda:0       # or cpu
     #
     # Features:

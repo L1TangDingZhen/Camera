@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.detectors import PersonDetector, PoseEstimatorFactory
-from src.state import BehaviorStateMachine, ROIManager
+from src.state import BehaviorStateMachine, ROIManager, MultiPersonManager
 from src.storage import EventLogger
 
 
@@ -54,9 +54,26 @@ class LifeTracker:
         print("[Init] Create event logger...")
         self.event_logger = EventLogger(self.config)
 
-        # 4. Create state machine（Pass database for SessionTracker）
-        print("[Init] Create state machine...")
-        self.state_machine = BehaviorStateMachine(self.config, self.roi_manager, database=self.event_logger.db)
+        # 4. Create state machine or multi-person manager
+        self.enable_multi_person = self.config['models']['person'].get('enable_tracking', False)
+
+        if self.enable_multi_person:
+            print("[Init] Create multi-person manager...")
+            self.multi_person_manager = MultiPersonManager(
+                self.config,
+                self.roi_manager,
+                self.event_logger
+            )
+            self.state_machine = None  # Multi-person mode doesn't use single state machine
+            print(f"[Init] Multi-person mode enabled (max: {self.config['models']['person'].get('max_persons', 5)} persons)")
+        else:
+            print("[Init] Create state machine (single-person mode)...")
+            self.state_machine = BehaviorStateMachine(
+                self.config,
+                self.roi_manager,
+                database=self.event_logger.db
+            )
+            self.multi_person_manager = None
 
         # 5. InitCamera
         print("[Init] Opening camera...")
@@ -121,7 +138,8 @@ class LifeTracker:
         # Detection frequency control
         detection_interval = self.config.get('inference', {}).get('detection_interval', 1)
         detection_counter = 0  # Detection frame counter
-        cached_bbox = None  # Cached bbox
+        cached_bbox = None  # Cached bbox (single-person mode)
+        cached_detections = []  # Cached detections (multi-person mode)
         if detection_interval > 1:
             print(f"⚡ Detection optimization: Every{detection_interval}frame detect once, reuse results for intermediate frames\n")
 
@@ -163,38 +181,65 @@ class LifeTracker:
                 detection_counter += 1
                 t0 = time.time()
 
-                if detection_counter % detection_interval == 0:
-                    # Execute actual detection
-                    bbox = self.person_detector.detect(frame)
-                    cached_bbox = bbox  # Cache result
+                if self.enable_multi_person:
+                    # Multi-person detection and tracking
+                    if detection_counter % detection_interval == 0:
+                        detections = self.person_detector.detect_multi(frame)
+                        cached_detections = detections
+                        t1 = time.time()
+                        profiling_data['detection'].append((t1 - t0) * 1000)
+                    else:
+                        detections = cached_detections
+                        t1 = time.time()
+
+                    # 2 & 3. Multi-person pose estimation and state update
+                    t0 = time.time()
+                    events = self.multi_person_manager.update_multi(
+                        detections,
+                        frame,
+                        self.pose_estimator,
+                        current_time
+                    )
                     t1 = time.time()
-                    profiling_data['detection'].append((t1 - t0) * 1000)
+                    profiling_data['state_machine'].append((t1 - t0) * 1000)
+
+                    # Save for visualization (store all detections)
+                    self._last_detections = detections
+                    self._last_keypoints = None  # Will be handled in visualization
+
                 else:
-                    # Reuse previous detection result
-                    bbox = cached_bbox
+                    # Single-person mode (original logic)
+                    if detection_counter % detection_interval == 0:
+                        # Execute actual detection
+                        bbox = self.person_detector.detect(frame)
+                        cached_bbox = bbox  # Cache result
+                        t1 = time.time()
+                        profiling_data['detection'].append((t1 - t0) * 1000)
+                    else:
+                        # Reuse previous detection result
+                        bbox = cached_bbox
+                        t1 = time.time()
+
+                    # 2. Pose estimation
+                    t0 = time.time()
+                    keypoints = None
+                    world_landmarks = None
+                    if bbox is not None:
+                        keypoints = self.pose_estimator.estimate(frame, bbox)
+                        # Get 3D world landmarks (if supported)
+                        if hasattr(self.pose_estimator, 'get_world_landmarks'):
+                            world_landmarks = self.pose_estimator.get_world_landmarks()
                     t1 = time.time()
-                    # Do not record time, no actual detection performed
+                    profiling_data['pose'].append((t1 - t0) * 1000)
 
-                # 2. Pose estimation
-                t0 = time.time()
-                keypoints = None
-                world_landmarks = None
-                if bbox is not None:
-                    keypoints = self.pose_estimator.estimate(frame, bbox)
-                    # Get 3D world landmarks (if supported)
-                    if hasattr(self.pose_estimator, 'get_world_landmarks'):
-                        world_landmarks = self.pose_estimator.get_world_landmarks()
-                t1 = time.time()
-                profiling_data['pose'].append((t1 - t0) * 1000)
+                    # Save keypoints for debug display
+                    self._last_keypoints = keypoints
 
-                # Save keypoints for debug display
-                self._last_keypoints = keypoints
-
-                # 3. Update state machine（Use 3D coordinates）
-                t0 = time.time()
-                events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
-                t1 = time.time()
-                profiling_data['state_machine'].append((t1 - t0) * 1000)
+                    # 3. Update state machine（Use 3D coordinates）
+                    t0 = time.time()
+                    events = self.state_machine.update(bbox, keypoints, current_time, world_landmarks)
+                    t1 = time.time()
+                    profiling_data['state_machine'].append((t1 - t0) * 1000)
 
                 # 4. Log events
                 if events:
@@ -209,7 +254,10 @@ class LifeTracker:
                 # 6. Visualization
                 t0 = time.time()
                 if self.show_visualization:
-                    vis_frame = self._visualize(frame, bbox, keypoints, fps)
+                    if self.enable_multi_person:
+                        vis_frame = self._visualize_multi(frame, detections, fps)
+                    else:
+                        vis_frame = self._visualize(frame, bbox, keypoints, fps)
                     cv2.imshow('Life Tracker', vis_frame)
                 t1 = time.time()
                 profiling_data['visualization'].append((t1 - t0) * 1000)
@@ -285,6 +333,170 @@ class LifeTracker:
         self._draw_status(vis_frame, fps)
 
         return vis_frame
+
+    def _visualize_multi(self, frame: np.ndarray, detections: list, fps: float) -> np.ndarray:
+        """
+        Multi-person visualization
+
+        Args:
+            frame: Original frame
+            detections: List of detections [{bbox, tracking_id, confidence}, ...]
+            fps: Frame rate
+
+        Returns:
+            Visualized frame
+        """
+        vis_frame = frame.copy()
+
+        # Draw ROI zones
+        if getattr(self, 'show_roi', True):
+            vis_frame = self.roi_manager.draw_zones(vis_frame)
+
+        # Define colors for different tracking_ids
+        colors = {
+            0: (255, 100, 100),   # Light blue
+            1: (100, 255, 100),   # Light green
+            2: (100, 100, 255),   # Light red
+            3: (255, 255, 100),   # Light cyan
+            4: (255, 100, 255),   # Light magenta
+        }
+
+        # Draw each person
+        for detection in detections:
+            tracking_id = detection['tracking_id']
+            bbox = detection['bbox']
+            confidence = detection['confidence']
+
+            # Get color for this tracking_id
+            color = colors.get(tracking_id % len(colors), (0, 255, 0))
+
+            # Draw bbox
+            x1, y1, x2, y2 = bbox[:4].astype(int)
+            cv2.rectangle(vis_frame, (x1, y1), (x2, y2), color, 3)
+
+            # Draw skeleton if keypoints available
+            if self.multi_person_manager and tracking_id in self.multi_person_manager.person_keypoints:
+                keypoints = self.multi_person_manager.person_keypoints[tracking_id]
+                if keypoints is not None:
+                    self._draw_skeleton_for_person(vis_frame, keypoints, bbox, color)
+
+            # Get person state if available
+            person_state = "unknown"
+            if self.multi_person_manager:
+                state = self.multi_person_manager.get_person_state(tracking_id)
+                if state:
+                    person_state = state
+
+            # Draw label with tracking_id and state
+            label = f"ID:{tracking_id} [{person_state}]"
+            label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+
+            # Label background
+            cv2.rectangle(
+                vis_frame,
+                (x1, y1 - label_size[1] - 10),
+                (x1 + label_size[0] + 10, y1),
+                color,
+                -1
+            )
+
+            # Label text
+            cv2.putText(
+                vis_frame,
+                label,
+                (x1 + 5, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                2
+            )
+
+        # Draw status (FPS, person count, etc.)
+        self._draw_status_multi(vis_frame, fps, len(detections))
+
+        return vis_frame
+
+    def _draw_skeleton_for_person(self, frame: np.ndarray, keypoints: np.ndarray,
+                                   bbox: np.ndarray, color: tuple):
+        """
+        Draw skeleton for a single person in multi-person mode
+
+        Args:
+            frame: Frame to draw on
+            keypoints: Person's keypoints (17x3 array)
+            bbox: Person's bounding box
+            color: Color to use for this person
+        """
+        from src.detectors.base import Keypoint
+
+        # Define body part indices for confidence thresholds
+        lower_body_indices = {11, 12, 13, 14, 15, 16}  # hips, knees, ankles
+
+        # Confidence thresholds (same as single-person mode)
+        upper_body_high = 0.3
+        upper_body_low = 0.25
+        lower_body_high = 0.55
+        lower_body_low = 0.4
+
+        # Max segment length based on bbox height
+        _, y1, _, y2, _ = bbox.astype(float)
+        max_seg_len = (y2 - y1) * 1.2
+
+        # Draw keypoints
+        for i, (x, y, conf) in enumerate(keypoints):
+            high = lower_body_high if i in lower_body_indices else upper_body_high
+            if conf > high:
+                # Use person's assigned color for keypoints
+                cv2.circle(frame, (int(x), int(y)), 3, color, -1)
+
+        # Draw skeleton connections
+        connections = Keypoint.get_connections()
+        for idx1, idx2 in connections:
+            high1 = lower_body_high if idx1 in lower_body_indices else upper_body_high
+            high2 = lower_body_high if idx2 in lower_body_indices else upper_body_high
+            low1 = lower_body_low if idx1 in lower_body_indices else upper_body_low
+            low2 = lower_body_low if idx2 in lower_body_indices else upper_body_low
+
+            c1 = keypoints[idx1, 2]
+            c2 = keypoints[idx2, 2]
+            allow_line = ((c1 > high1 and c2 > low2) or (c2 > high2 and c1 > low1)) and (c1 > low1 and c2 > low2)
+
+            if allow_line:
+                x1, y1 = keypoints[idx1, :2].astype(int)
+                x2, y2 = keypoints[idx2, :2].astype(int)
+
+                # Skip overly long segments
+                seg_len = np.hypot(x1 - x2, y1 - y2)
+                if seg_len <= max_seg_len:
+                    # Use person's assigned color for skeleton lines
+                    cv2.line(frame, (x1, y1), (x2, y2), color, 2)
+
+    def _draw_status_multi(self, frame: np.ndarray, fps: float, person_count: int):
+        """Draw status info for multi-person mode"""
+        info_y = 30
+
+        # FPS
+        cv2.putText(frame, f"FPS: {fps:.1f}", (10, info_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        # Person count
+        info_y += 35
+        cv2.putText(frame, f"Persons: {person_count}", (10, info_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        # Active tracking count
+        if self.multi_person_manager:
+            active_count = self.multi_person_manager.get_active_person_count()
+            info_y += 35
+            cv2.putText(frame, f"Tracked: {active_count}", (10, info_y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+            # All states
+            all_states = self.multi_person_manager.get_all_states()
+            for tracking_id, state in all_states.items():
+                info_y += 30
+                cv2.putText(frame, f"  ID {tracking_id}: {state}", (10, info_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
 
     def _draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray, bbox: Optional[np.ndarray] = None):
         """Draw keypointsand skeleton"""
