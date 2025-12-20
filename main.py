@@ -854,12 +854,10 @@ class LifeTracker:
 
 def main():
     """Main function"""
-    parser = argparse.ArgumentParser(description='Life Tracker - Behavior monitoring system')
+    parser = argparse.ArgumentParser(description='Life Tracker - Synchronous Mode (Single Camera)')
 
-    parser.add_argument('--config', type=str,
-                       help='Configuration file path (specify directly)')
-    parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'], default='gpu',
-                       help='Running mode: cpu（Laptop/X390）or gpu（PC/Jetson），default gpu, convenient for direct `python main.py --mode gpu`')
+    parser.add_argument('--config', type=str, default='config/config_gpu.yaml',
+                       help='Configuration file path (default: config_gpu.yaml)')
     parser.add_argument('--no-vis', action='store_true',
                        help='Do not show visualization window')
     parser.add_argument('--debug', action='store_true',
@@ -867,16 +865,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Select configuration file
-    if args.config:
-        # Directly specify config file
-        config_path = args.config
-    elif args.mode:
-        # Use --mode parameter
-        config_path = f'config/config_{args.mode}.yaml'
-    else:
-        # Default use CPU mode
-        config_path = 'config/config_cpu.yaml'
+    # Use specified config file
+    config_path = args.config
 
     # Check configuration file
     if not Path(config_path).exists():

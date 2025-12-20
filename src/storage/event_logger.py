@@ -1,5 +1,5 @@
 """
-事件记录器
+Event Logger
 负责将行为事件写入数据库和日志文件
 """
 
@@ -12,12 +12,12 @@ from ..state.behavior_state import BehaviorEvent
 
 
 class EventLogger:
-    """事件记录器"""
+    """Event Logger"""
 
     def __init__(self, config: dict):
         """
         Args:
-            config: 配置字典
+            config: Configuration dictionary
         """
         self.config = config
 
@@ -43,10 +43,22 @@ class EventLogger:
             events: 事件列表
         """
         for event in events:
-            self._log_event(event)
+            self.log_event(event)
+
+    def log_event(self, event: BehaviorEvent):
+        """
+        Log single event（公共方法）
+
+        Args:
+            event: 事件
+        """
+        self._log_event(event)
 
     def _log_event(self, event: BehaviorEvent):
-        """记录单个事件"""
+        """Log single event"""
+        # Extract camera_id from metadata if present
+        camera_id = event.metadata.get('camera_id', None) if event.metadata else None
+
         # 写入数据库
         self.db.insert_event(
             event_type=event.event_type.value,
@@ -54,7 +66,8 @@ class EventLogger:
             state=event.state.value,
             zone=event.zone,
             metadata=event.metadata,
-            tracking_id=event.tracking_id
+            tracking_id=event.tracking_id,
+            camera_id=camera_id
         )
 
         # 写入日志文件
@@ -137,5 +150,5 @@ class EventLogger:
         return self.db.get_events(start_time=start_time)
 
     def close(self):
-        """关闭记录器"""
+        """Close logger"""
         self.db.close()

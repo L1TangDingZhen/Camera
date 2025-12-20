@@ -942,22 +942,42 @@ class AsyncLifeTracker:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Life Tracker - Async Pipeline')
+    parser = argparse.ArgumentParser(description='Life Tracker - Async Pipeline (Single & Multi-Camera)')
     parser.add_argument('--config', type=str, default='config/config_gpu.yaml',
-                       help='Path to config file')
-    parser.add_argument('--mode', type=str, choices=['cpu', 'gpu'], default='gpu',
-                       help='Run mode (cpu or gpu)')
+                       help='Path to config file (default: config_gpu.yaml)')
     args = parser.parse_args()
 
-    # Select config file based on mode
-    if args.mode == 'cpu':
-        config_path = 'config/config_cpu.yaml'
-    else:
-        config_path = args.config
+    # Use specified config file
+    config_path = args.config
 
-    # Create and run tracker
-    tracker = AsyncLifeTracker(config_path)
-    tracker.run()
+    # Load config to check camera mode
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    cameras_config = config.get('cameras', {})
+
+    # Detect if multi-camera mode
+    is_multi_camera = False
+
+    if isinstance(cameras_config, dict):
+        # Check if auto_detect is enabled (multi-camera mode)
+        if cameras_config.get('auto_detect', False):
+            is_multi_camera = True
+    elif isinstance(cameras_config, list):
+        # Check if list has multiple cameras
+        if len(cameras_config) > 1:
+            is_multi_camera = True
+
+    # Launch appropriate mode
+    if is_multi_camera:
+        print("[Main] Detected multi-camera configuration")
+        from src.multi_camera import MultiCameraManager
+        manager = MultiCameraManager(config_path)
+        manager.run()
+    else:
+        print("[Main] Detected single-camera configuration")
+        tracker = AsyncLifeTracker(config_path)
+        tracker.run()
 
 
 if __name__ == '__main__':

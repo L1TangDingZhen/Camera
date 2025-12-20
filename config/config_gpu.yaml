@@ -133,12 +133,45 @@ models:
     #   - See INSTALL_RTMPOSE.md for details
     # ========================================================
 
+# ========================================================================
+# Camera Configuration - Single or Multi-Camera
+# ========================================================================
+# Choose ONE option below:
+#
+# Option 1: Single Camera (Default) - Works with main.py and main_async.py
 camera:
   source: 0  # video0是彩色摄像头
   fps: 30  # GPU mode supports high frame rate
   resolution: [1920, 1080]  # FHD - MJPEG encoding enables 30FPS
   flip: false
   rotation: 0
+
+# Option 2: Multi-Camera Auto-Detect - Only works with main_async.py
+# Uncomment below and comment out Option 1
+#cameras:
+#  auto_detect: true
+#  default_resolution: [1920, 1080]  # FHD
+#  default_fps: 30
+#  max_device_id: 10  # Scan /dev/video0 to /dev/video9
+
+# Option 3: Multi-Camera Manual - Only works with main_async.py
+# Uncomment below and comment out Option 1
+#cameras:
+#  - id: 0
+#    name: "Camera-0"
+#    source: 0
+#    resolution: [1920, 1080]
+#    fps: 30
+#    flip: false
+#    rotation: 0
+#  - id: 1
+#    name: "Camera-1"
+#    source: 2
+#    resolution: [1920, 1080]
+#    fps: 30
+#    flip: false
+#    rotation: 0
+# ========================================================================
 
 inference:
   skip_frames: 0
