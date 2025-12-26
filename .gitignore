@@ -189,6 +189,15 @@ optimize_*.py
 
 # Rebuild scripts and logs
 rebuild_*
+build_rtmpose_*.py
+REBUILD_INSTRUCTIONS.txt
+
+# Engine backup files
+*.engine.backup
+*.engine.broken
+
+# Test shell scripts
+test_*.sh
 
 # Experimental/unused wrappers
 *_wrapper_hybrid.py

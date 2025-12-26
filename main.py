@@ -839,17 +839,45 @@ class LifeTracker:
 
     def cleanup(self):
         """Cleanup resources"""
-        print("\n[Cleanup] Release resources...")
+        print("\n[Cleanup] Releasing resources...")
 
+        # Cleanup GPU resources - RTMPose
+        if hasattr(self, 'pose_estimator') and hasattr(self.pose_estimator, 'cleanup'):
+            try:
+                self.pose_estimator.cleanup()
+                print("[Cleanup] RTMPose cleaned up")
+            except Exception as e:
+                print(f"[Cleanup] RTMPose warning: {e}")
+
+        # Cleanup GPU resources - YOLO
+        if hasattr(self, 'person_detector') and hasattr(self.person_detector, 'cleanup'):
+            try:
+                self.person_detector.cleanup()
+                print("[Cleanup] YOLO cleaned up")
+            except Exception as e:
+                print(f"[Cleanup] YOLO warning: {e}")
+
+        # Final CUDA cache cleanup
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                print("[Cleanup] CUDA cache cleared")
+        except:
+            pass
+
+        # Release camera
         if hasattr(self, 'cap'):
             self.cap.release()
 
+        # Close windows
         cv2.destroyAllWindows()
 
+        # Close event logger
         if hasattr(self, 'event_logger'):
             self.event_logger.close()
 
-        print("[Cleanup] Completed!")
+        print("[Cleanup] All resources released!")
 
 
 def main():

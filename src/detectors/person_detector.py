@@ -42,6 +42,9 @@ class PersonDetector(DetectorInterface):
         # Performance statistics
         self.inference_times = []
 
+        # Batch size configuration (for batch TensorRT engines)
+        self.fixed_batch_size = config.get('fixed_batch_size', None)  # e.g., 4 for batch=4 engine
+
         # Load model
         print(f"[PersonDetector] Loading model: {self.model_path}")
         print(f"[PersonDetector] Device: {self.device}")
@@ -58,15 +61,79 @@ class PersonDetector(DetectorInterface):
                 if hasattr(self.model, 'to'):
                     self.model.to(self.device)
 
-            # Warmup
+            # Warmup with correct batch size for fixed-batch engines
             dummy_frame = np.zeros((640, 640, 3), dtype=np.uint8)
-            _ = self.model(dummy_frame, verbose=False, device=self.device)
+            if self.fixed_batch_size:
+                # For fixed batch engines, warmup with full batch
+                dummy_batch = [dummy_frame] * self.fixed_batch_size
+                _ = self.model(dummy_batch, verbose=False, device=self.device)
+            else:
+                _ = self.model(dummy_frame, verbose=False, device=self.device)
 
-            print(f"[PersonDetector] Model loaded successfully")
+            print(f"[PersonDetector] Model loaded successfully (batch={self.fixed_batch_size or 'dynamic'})")
 
         except Exception as e:
             print(f"[PersonDetector] Model loading failed: {e}")
             raise
+
+    def detect_batch(self, frames: List[np.ndarray]) -> List[Optional[np.ndarray]]:
+        """
+        Batch detection - detect person in multiple frames at once
+
+        Args:
+            frames: List of input images [(H, W, 3), ...]
+
+        Returns:
+            List of bboxes: [[x1, y1, x2, y2, confidence] or None, ...]
+        """
+        if len(frames) == 0:
+            return []
+
+        start_time = time.time()
+        original_count = len(frames)
+
+        try:
+            # Handle fixed batch size engines (pad if needed)
+            if self.fixed_batch_size and len(frames) < self.fixed_batch_size:
+                # Pad with first frame to reach fixed batch size
+                padding_count = self.fixed_batch_size - len(frames)
+                frames = frames + [frames[0]] * padding_count
+
+            # YOLO batch inference
+            results = self.model(
+                frames,
+                conf=self.confidence,
+                iou=self.iou,
+                classes=[0],
+                verbose=False,
+                device=self.device
+            )
+
+            # Record inference time
+            inference_time = time.time() - start_time
+            self.inference_times.append(inference_time)
+            if len(self.inference_times) > 100:
+                self.inference_times.pop(0)
+
+            # Extract bboxes for each frame (only original frames, not padding)
+            bboxes = []
+            for i, result in enumerate(results):
+                if i >= original_count:
+                    break  # Skip padded results
+                if result.boxes is None or len(result.boxes) == 0:
+                    bboxes.append(None)
+                else:
+                    box = result.boxes[0]
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    confidence = float(box.conf[0].cpu().numpy())
+                    bbox = np.array([x1, y1, x2, y2, confidence], dtype=np.float32)
+                    bboxes.append(bbox)
+
+            return bboxes
+
+        except Exception as e:
+            print(f"[PersonDetector] Batch detection failed: {e}")
+            return [None] * original_count
 
     def detect(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """
@@ -261,6 +328,25 @@ class PersonDetector(DetectorInterface):
             'min_time': np.min(self.inference_times),
             'max_time': np.max(self.inference_times),
         }
+
+    def cleanup(self):
+        """Clean up GPU resources - call before program exit"""
+        # Clear model reference
+        if hasattr(self, 'model') and self.model is not None:
+            del self.model
+            self.model = None
+
+        # Clear cached bboxes
+        self._last_bbox = None
+        self._last_bboxes = {}
+
+        # Clear CUDA cache
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except:
+            pass
 
 
 class PersonDetectorFactory:

@@ -713,13 +713,22 @@ class AsyncLifeTracker:
 
             # Get person state if available
             person_state = "unknown"
+            person_name = None
             if self.multi_person_manager:
                 state = self.multi_person_manager.get_person_state(tracking_id)
                 if state:
                     person_state = state
 
-            # Draw label with tracking_id and state
-            label = f"ID:{tracking_id} [{person_state}]"
+                # Get person name if face recognition is enabled
+                person_name = self.multi_person_manager.get_person_name(tracking_id)
+
+            # Draw label with name (if available), tracking_id, and state
+            if person_name and person_name != f"Person {tracking_id}":
+                # Face recognition name available
+                label = f"{person_name} (T{tracking_id}) [{person_state}]"
+            else:
+                # No name, just show tracking ID and state
+                label = f"ID:{tracking_id} [{person_state}]"
             label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
 
             # Label background
@@ -823,8 +832,16 @@ class AsyncLifeTracker:
             # List all tracked persons and states
             all_states = self.multi_person_manager.get_all_states()
             for tracking_id, state in all_states.items():
+                person_name = self.multi_person_manager.get_person_name(tracking_id)
                 info_y += 35
-                cv2.putText(frame, f"  ID {tracking_id}: {state}", (10, info_y),
+
+                # Show name if available, otherwise just ID
+                if person_name and person_name != f"Person {tracking_id}":
+                    display_text = f"  {person_name} (T{tracking_id}): {state}"
+                else:
+                    display_text = f"  ID {tracking_id}: {state}"
+
+                cv2.putText(frame, display_text, (10, info_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     # =====================================================================
@@ -852,20 +869,46 @@ class AsyncLifeTracker:
             print("\n[Exit] Ctrl+C interrupt")
             self.running = False
 
-        # Wait for all threads to exit
-        print("[Run] Waiting for threads to exit...")
-        for t in threads:
-            t.join(timeout=2.0)
+        finally:
+            # Wait for all threads to exit
+            print("[Run] Waiting for threads to exit...")
+            for t in threads:
+                t.join(timeout=2.0)
 
-        # Print final performance summary
-        self._print_performance_summary()
+            # Print final performance summary
+            self._print_performance_summary()
 
-        # Cleanup
-        self.cap.release()
-        if self.show_visualization:
-            cv2.destroyAllWindows()
+            # Cleanup GPU resources
+            print("[Cleanup] Releasing GPU resources...")
+            if hasattr(self, 'pose_estimator') and hasattr(self.pose_estimator, 'cleanup'):
+                try:
+                    self.pose_estimator.cleanup()
+                    print("[Cleanup] RTMPose cleaned up")
+                except Exception as e:
+                    print(f"[Cleanup] RTMPose warning: {e}")
 
-        print("[Run] Program exited\n")
+            if hasattr(self, 'person_detector') and hasattr(self.person_detector, 'cleanup'):
+                try:
+                    self.person_detector.cleanup()
+                    print("[Cleanup] YOLO cleaned up")
+                except Exception as e:
+                    print(f"[Cleanup] YOLO warning: {e}")
+
+            # Final CUDA cache cleanup
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    print("[Cleanup] CUDA cache cleared")
+            except:
+                pass
+
+            # Release camera and windows
+            self.cap.release()
+            if self.show_visualization:
+                cv2.destroyAllWindows()
+
+            print("[Run] All resources released\n")
 
     def _print_performance_summary(self):
         """Print detailed performance summary at the end"""
@@ -971,8 +1014,9 @@ def main():
     # Launch appropriate mode
     if is_multi_camera:
         print("[Main] Detected multi-camera configuration")
-        from src.multi_camera import MultiCameraManager
-        manager = MultiCameraManager(config_path)
+        print("[Main] Using SharedPipelineManager (optimized shared inference)")
+        from src.multi_camera import SharedPipelineManager
+        manager = SharedPipelineManager(config_path)
         manager.run()
     else:
         print("[Main] Detected single-camera configuration")

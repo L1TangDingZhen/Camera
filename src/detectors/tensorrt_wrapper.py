@@ -20,17 +20,20 @@ cuda.init()
 
 
 class TensorRTEngine:
-    """TensorRT引擎包装器"""
+    """TensorRT引擎包装器 - 支持动态 batch"""
 
-    def __init__(self, engine_path: str):
+    def __init__(self, engine_path: str, max_batch_size: int = 4):
         """
         Initialize TensorRT engine
 
         Args:
             engine_path: Path to the .engine file
+            max_batch_size: Maximum batch size supported by the engine
         """
         self.engine_path = engine_path
         self.logger = trt.Logger(trt.Logger.WARNING)
+        self.max_batch_size = max_batch_size
+        self.current_batch_size = None  # Force update on first infer()
 
         # Get PyCUDA context from PyTorch (avoid creating conflicting context)
         if torch.cuda.is_available():
@@ -62,7 +65,8 @@ class TensorRTEngine:
         # Get input/output information
         self.input_names = []
         self.output_names = []
-        self.input_shapes = {}
+        self.input_shapes = {}  # Base shapes (without batch dimension resolved)
+        self.output_base_shapes = {}
 
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
@@ -71,58 +75,67 @@ class TensorRTEngine:
 
             if self.engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
                 self.input_names.append(name)
-                # Handle dynamic shapes: replace -1 with 1 for batch size
-                concrete_shape = tuple(1 if s == -1 else s for s in shape)
-                self.input_shapes[name] = concrete_shape
-                # Set concrete input shape in context
-                self.context.set_input_shape(name, concrete_shape)
+                self.input_shapes[name] = shape  # Keep original shape with -1
             else:
                 self.output_names.append(name)
+                self.output_base_shapes[name] = shape
 
             print(f"[TensorRT]   Tensor: {name}, Shape: {shape}, Dtype: {dtype}")
 
-        # Allocate device memory (after setting input shapes)
-        self._allocate_buffers()
+        # Allocate device memory for max batch size (GPU memory)
+        self._allocate_buffers(max_batch_size)
 
-        print(f"[TensorRT] Engine loaded successfully")
+        # Set initial input shape for dynamic batch engines (CRITICAL!)
+        # Set to batch=1 initially, will be updated in infer() if needed
+        for name in self.input_names:
+            base_shape = self.input_shapes[name]
+            initial_shape = tuple(1 if s == -1 else s for s in base_shape)
+            self.context.set_input_shape(name, initial_shape)
+            print(f"[TensorRT]   Initial input shape set: {name} = {initial_shape}")
+
+        # Note: Output buffers already allocated by _allocate_buffers() for max_batch_size
+        # They will be updated in infer() when batch size changes
+
+        print(f"[TensorRT] Engine loaded successfully (max_batch={max_batch_size})")
         print(f"[TensorRT]   Inputs: {self.input_names}")
         print(f"[TensorRT]   Outputs: {self.output_names}")
 
-    def _allocate_buffers(self):
+    def _allocate_buffers(self, batch_size: int = 1):
         """Allocate GPU memory for inputs and outputs (TensorRT 10.x API)"""
         self.inputs = {}
         self.outputs = {}
 
         for name in self.input_names:
-            # Use concrete shape set earlier (with batch size = 1)
-            shape = self.input_shapes[name]
+            base_shape = self.input_shapes[name]
+            # Replace -1 (dynamic batch) with actual batch size
+            shape = tuple(batch_size if s == -1 else s for s in base_shape)
             dtype = trt.nptype(self.engine.get_tensor_dtype(name))
             size = int(np.prod(shape))
 
             # Allocate device memory
             device_mem = cuda.mem_alloc(size * np.dtype(dtype).itemsize)
             self.inputs[name] = {
+                'base_shape': base_shape,
                 'shape': shape,
                 'dtype': dtype,
                 'device': device_mem,
-                'host': None  # Will allocate on demand
+                'host': None
             }
 
         for name in self.output_names:
-            # Get output shape and convert dynamic dimensions
-            shape = self.engine.get_tensor_shape(name)
-            # Replace -1 dimensions with 1 (based on input batch size = 1)
-            concrete_shape = tuple(1 if s == -1 else s for s in shape)
-
+            base_shape = self.output_base_shapes[name]
+            # Replace -1 (dynamic batch) with actual batch size
+            shape = tuple(batch_size if s == -1 else s for s in base_shape)
             dtype = trt.nptype(self.engine.get_tensor_dtype(name))
-            size = int(np.prod(concrete_shape))
+            size = int(np.prod(shape))
 
             # Allocate device and host memory
             device_mem = cuda.mem_alloc(size * np.dtype(dtype).itemsize)
-            host_mem = np.empty(concrete_shape, dtype=dtype)
+            host_mem = np.empty(shape, dtype=dtype)
 
             self.outputs[name] = {
-                'shape': concrete_shape,
+                'base_shape': base_shape,
+                'shape': shape,
                 'dtype': dtype,
                 'device': device_mem,
                 'host': host_mem
@@ -130,23 +143,40 @@ class TensorRTEngine:
 
     def infer(self, input_data: np.ndarray) -> dict:
         """
-        Run inference (TensorRT 10.x API)
+        Run inference with dynamic batch support (TensorRT 10.x API)
 
         Args:
-            input_data: Input numpy array (should match engine input shape)
+            input_data: Input numpy array, shape (batch, C, H, W)
 
         Returns:
             dict: Dictionary of output tensors {name: numpy_array}
         """
-        # Assume single input for now
         input_name = self.input_names[0]
+        batch_size = input_data.shape[0]
 
-        # Verify input shape
-        expected_shape = self.inputs[input_name]['shape']
-        if input_data.shape != tuple(expected_shape):
+        # Check if we need to update shapes for different batch size
+        base_shape = self.inputs[input_name]['base_shape']
+        expected_shape = tuple(batch_size if s == -1 else s for s in base_shape)
+
+        if input_data.shape != expected_shape:
             raise ValueError(
                 f"Input shape mismatch: expected {expected_shape}, got {input_data.shape}"
             )
+
+        # Update context input shape if batch size changed
+        if batch_size != self.current_batch_size:
+            self.current_batch_size = batch_size
+            self.context.set_input_shape(input_name, expected_shape)
+
+            # Update output buffers for new batch size
+            # NOTE: Device memory already allocated for max_batch_size, just update shape/host
+            for name in self.output_names:
+                out_base = self.outputs[name]['base_shape']
+                out_shape = tuple(batch_size if s == -1 else s for s in out_base)
+
+                # Update shape and host buffer only (device buffer stays allocated at max size)
+                self.outputs[name]['shape'] = out_shape
+                self.outputs[name]['host'] = np.empty(out_shape, dtype=self.outputs[name]['dtype'])
 
         # Copy input to device (async)
         cuda.memcpy_htod_async(
@@ -171,7 +201,6 @@ class TensorRTEngine:
         self.stream.synchronize()
 
         # Copy outputs to host
-        results = {}
         for name in self.output_names:
             cuda.memcpy_dtoh_async(
                 self.outputs[name]['host'],
@@ -183,20 +212,56 @@ class TensorRTEngine:
         self.stream.synchronize()
 
         # Copy results
+        results = {}
         for name in self.output_names:
             results[name] = self.outputs[name]['host'].copy()
 
         return results
 
-    def __del__(self):
-        """Cleanup"""
-        # Pop CUDA context if we created one
+    def cleanup(self):
+        """Explicit cleanup - call this before program exit"""
+        # Free device memory first
+        if hasattr(self, 'inputs'):
+            for name in self.inputs:
+                if self.inputs[name]['device'] is not None:
+                    try:
+                        self.inputs[name]['device'].free()
+                        self.inputs[name]['device'] = None
+                    except:
+                        pass
+
+        if hasattr(self, 'outputs'):
+            for name in self.outputs:
+                if self.outputs[name]['device'] is not None:
+                    try:
+                        self.outputs[name]['device'].free()
+                        self.outputs[name]['device'] = None
+                    except:
+                        pass
+
+        # Destroy TensorRT context and engine
+        if hasattr(self, 'context') and self.context is not None:
+            del self.context
+            self.context = None
+
+        if hasattr(self, 'engine') and self.engine is not None:
+            del self.engine
+            self.engine = None
+
+        # Pop CUDA context
         if hasattr(self, 'cuda_ctx') and self.cuda_ctx is not None:
             try:
                 self.cuda_ctx.pop()
+                self.cuda_ctx = None
             except:
-                pass  # Context may already be destroyed
-        # PyCUDA will handle memory cleanup automatically
+                pass
+
+    def __del__(self):
+        """Destructor - try cleanup but don't fail"""
+        try:
+            self.cleanup()
+        except:
+            pass  # Ignore errors during destruction
 
 
 class TensorRTRTMPose:
@@ -417,6 +482,13 @@ class TensorRTRTMPose:
         y_scores = np.max(y_logits, axis=-1)
         scores = np.sqrt(x_scores * y_scores)
 
+        # DEBUG: Print SimCC argmax for head keypoints
+        import os
+        if os.getenv('DEBUG_SIMCC'):
+            print(f"\n  [DEBUG] SimCC argmax (first 5 keypoints):")
+            for i in range(5):
+                print(f"    Keypoint {i}: x_argmax={x_coords[i]}, y_argmax={y_coords[i]}")
+
         # SimCC坐标映射到模型输入图像坐标
         # RTMPose的SimCC: simcc_split_ratio = 2.0
         simcc_split_ratio = 2.0
@@ -464,3 +536,147 @@ class TensorRTRTMPose:
         keypoints = self.postprocess(outputs, bbox, img_shape)
 
         return keypoints
+
+    def preprocess_batch(self, images: list, bboxes: list) -> tuple:
+        """
+        Batch preprocess for multiple images/bboxes
+
+        Args:
+            images: List of images [(H, W, 3), ...]
+            bboxes: List of bboxes [[x1, y1, x2, y2, score], ...]
+
+        Returns:
+            (batch_tensor, centers, scales): Preprocessed batch and transform info
+        """
+        import cv2
+
+        batch_size = len(images)
+        batch_data = []
+        centers = []
+        scales = []
+
+        for img, bbox in zip(images, bboxes):
+            # 从bbox计算center和scale
+            x1, y1, x2, y2 = bbox[:4]
+            center = np.array([(x1 + x2) / 2, (y1 + y2) / 2], dtype=np.float32)
+
+            # Scale with padding
+            padding = 1.25
+            w = (x2 - x1) * padding
+            h = (y2 - y1) * padding
+
+            # 调整aspect ratio
+            aspect_ratio = self.input_size[1] / self.input_size[0]
+            if w > h * aspect_ratio:
+                scale = np.array([w, w / aspect_ratio], dtype=np.float32)
+            else:
+                scale = np.array([h * aspect_ratio, h], dtype=np.float32)
+
+            centers.append(center)
+            scales.append(scale)
+
+            # 获取仿射变换矩阵
+            output_size = (self.input_size[1], self.input_size[0])
+            trans = self._get_warp_matrix(center, scale, 0, output_size, inv=False)
+
+            # 仿射变换
+            warped = cv2.warpAffine(img, trans, output_size, flags=cv2.INTER_LINEAR)
+            warped_rgb = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
+
+            # Normalize
+            normalized = (warped_rgb.astype(np.float32) - self.mean) / self.std
+            transposed = normalized.transpose(2, 0, 1)
+            batch_data.append(transposed)
+
+        # Stack to batch
+        batch_tensor = np.stack(batch_data, axis=0)
+        batch_tensor = np.ascontiguousarray(batch_tensor, dtype=np.float32)
+
+        return batch_tensor, centers, scales
+
+    def postprocess_batch(self, outputs: dict, bboxes: list, centers: list, scales: list) -> list:
+        """
+        Batch postprocess for multiple outputs
+
+        Args:
+            outputs: TensorRT batch outputs
+            bboxes: List of original bboxes
+            centers: List of centers from preprocess
+            scales: List of scales from preprocess
+
+        Returns:
+            List of keypoints [(17, 3), ...]
+        """
+        # Get SimCC outputs
+        if 'simcc_x' in outputs:
+            simcc_x = outputs['simcc_x']  # (batch, 17, 384)
+            simcc_y = outputs['simcc_y']  # (batch, 17, 512)
+        else:
+            output_list = list(outputs.values())
+            simcc_x = output_list[0]
+            simcc_y = output_list[1] if len(output_list) > 1 else output_list[0]
+
+        batch_size = simcc_x.shape[0]
+        num_keypoints = simcc_x.shape[1]
+        simcc_split_ratio = 2.0
+        output_size = (self.input_size[1], self.input_size[0])
+
+        all_keypoints = []
+
+        for b in range(batch_size):
+            x_logits = simcc_x[b]
+            y_logits = simcc_y[b]
+
+            # Argmax decode
+            x_coords = np.argmax(x_logits, axis=-1)
+            y_coords = np.argmax(y_logits, axis=-1)
+
+            # Confidence
+            x_scores = np.max(x_logits, axis=-1)
+            y_scores = np.max(y_logits, axis=-1)
+            scores = np.sqrt(x_scores * y_scores)
+
+            # SimCC to image coords
+            x_coords_img = x_coords.astype(np.float32) / simcc_split_ratio
+            y_coords_img = y_coords.astype(np.float32) / simcc_split_ratio
+
+            # Get inverse transform
+            trans_inv = self._get_warp_matrix(centers[b], scales[b], 0, output_size, inv=True)
+
+            # Transform keypoints back
+            keypoints = np.zeros((num_keypoints, 3), dtype=np.float32)
+            for i in range(num_keypoints):
+                pt = np.array([x_coords_img[i], y_coords_img[i], 1.0])
+                pt_transformed = trans_inv @ pt
+                keypoints[i, 0] = pt_transformed[0]
+                keypoints[i, 1] = pt_transformed[1]
+                keypoints[i, 2] = scores[i]
+
+            all_keypoints.append(keypoints)
+
+        return all_keypoints
+
+    def infer_batch(self, images: list, bboxes: list) -> list:
+        """
+        Batch inference for multiple images
+
+        Args:
+            images: List of images [(H, W, 3), ...]
+            bboxes: List of bboxes [[x1, y1, x2, y2, score], ...]
+
+        Returns:
+            List of keypoints [(17, 3), ...]
+        """
+        if len(images) == 0:
+            return []
+
+        # Batch preprocess
+        batch_tensor, centers, scales = self.preprocess_batch(images, bboxes)
+
+        # Batch inference
+        outputs = self.engine.infer(batch_tensor)
+
+        # Batch postprocess
+        keypoints_list = self.postprocess_batch(outputs, bboxes, centers, scales)
+
+        return keypoints_list

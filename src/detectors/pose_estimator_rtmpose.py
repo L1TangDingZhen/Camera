@@ -589,3 +589,23 @@ class RTMPoseEstimator(PoseEstimatorInterface):
             'min_time': np.min(self.inference_times),
             'max_time': np.max(self.inference_times),
         }
+
+    def cleanup(self):
+        """Clean up GPU resources - call before program exit"""
+        # Clean up TensorRT engine if used
+        if hasattr(self, 'trt_model') and self.trt_model is not None:
+            if hasattr(self.trt_model, 'engine') and self.trt_model.engine is not None:
+                self.trt_model.engine.cleanup()
+            self.trt_model = None
+
+        # Clean up MMPose inferencer if used
+        if hasattr(self, 'inferencer') and self.inferencer is not None:
+            self.inferencer = None
+
+        # Clear CUDA cache
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except:
+            pass
